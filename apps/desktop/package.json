@@ -195,6 +195,7 @@
     "beforeBuild": "scripts/before-build.mjs",
     "beforePack": "scripts/before-pack.mjs",
     "afterPack": "scripts/after-pack.mjs",
+    "afterAllArtifactBuild": "scripts/notarize-artifacts.mjs",
     "extraResources": [
       {
         "from": "build/install-stamp.json",
@@ -235,6 +236,8 @@
       "title": "Install Benaiah",
       "backgroundColor": "#f5f5f7",
       "iconSize": 96,
+      "sign": true,
+      "writeUpdateInfo": false,
       "window": {
         "width": 560,
         "height": 360

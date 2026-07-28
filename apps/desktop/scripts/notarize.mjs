@@ -62,8 +62,11 @@ export default async function notarize(context) {
   const profile = String(process.env.APPLE_NOTARY_PROFILE || '').trim()
   if (profile) {
     const zipPath = path.join(appOutDir, `${appName}.zip`)
+    const keychain = String(process.env.APPLE_NOTARY_KEYCHAIN || '').trim()
+    const credentials = ['--keychain-profile', profile]
+    if (keychain) credentials.push('--keychain', keychain)
     await run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', appPath, zipPath])
-    await run('xcrun', ['notarytool', 'submit', zipPath, '--keychain-profile', profile, '--wait'])
+    await run('xcrun', ['notarytool', 'submit', zipPath, ...credentials, '--wait'])
     await run('xcrun', ['stapler', 'staple', '-v', appPath])
     try {
       fs.rmSync(zipPath, { force: true })

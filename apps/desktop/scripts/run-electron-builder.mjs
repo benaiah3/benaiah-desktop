@@ -5,6 +5,7 @@
 // electron-builder fetch via @electron/get (electronVersion + ELECTRON_MIRROR).
 
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { createRequire } from "node:module"
@@ -38,6 +39,41 @@ function electronBuilderCli() {
 
 const dist = electronDistDir()
 const args = []
+const childEnv = { ...process.env }
+
+if (process.platform === "darwin" && !childEnv.CSC_KEYCHAIN) {
+  const signingDir = path.join(
+    os.homedir(),
+    "Library",
+    "Application Support",
+    "Benaiah",
+    "Signing"
+  )
+  const keychain = path.join(
+    os.homedir(),
+    "Library",
+    "Keychains",
+    "BenaiahSigning.keychain-db"
+  )
+  const passwordFile = path.join(signingDir, "benaiah-signing-keychain.password")
+
+  if (fs.existsSync(keychain) && fs.existsSync(passwordFile)) {
+    const password = fs.readFileSync(passwordFile, "utf8").trim()
+    const unlock = spawnSync(
+      "/usr/bin/security",
+      ["unlock-keychain", "-p", password, keychain],
+      { stdio: "ignore" }
+    )
+    if (unlock.status !== 0) {
+      console.error("[run-electron-builder] unable to unlock Benaiah signing keychain")
+      process.exit(unlock.status == null ? 1 : unlock.status)
+    }
+    childEnv.CSC_KEYCHAIN = keychain
+    childEnv.APPLE_NOTARY_PROFILE ||= "benaiah-notary"
+    childEnv.APPLE_NOTARY_KEYCHAIN = keychain
+  }
+}
+
 if (dist && fs.existsSync(distBinary(dist))) {
   args.push(`-c.electronDist=${dist}`)
 } else {
@@ -49,6 +85,7 @@ if (dist && fs.existsSync(distBinary(dist))) {
 args.push(...process.argv.slice(2))
 
 const result = spawnSync(process.execPath, [electronBuilderCli(), ...args], {
+  env: childEnv,
   stdio: "inherit",
 })
 if (result.error) {
