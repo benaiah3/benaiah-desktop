@@ -236,7 +236,7 @@ export async function revalidateRemoteConnection<TConnection extends RemoteConne
       return { ok: true, rebuilt: false }
     }
 
-    log('Cached remote Hermes backend failed liveness probe; dropping stale connection.')
+    log('Cached remote Benaiah backend failed liveness probe; dropping stale connection.')
     resetConnection()
 
     return { ok: true, rebuilt: true }

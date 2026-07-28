@@ -1,6 +1,19 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Hermes Agent" width="100%">
+  <img src="apps/desktop/public/benaiah-mark.png" alt="Benaiah" width="112">
 </p>
+
+# Benaiah Desktop
+
+This repository is Benaiah's first-phase native desktop distribution. The
+desktop application identity and user-facing experience are white-labelled for
+Benaiah while the underlying Hermes Agent runtime, protocols, storage contracts,
+and update architecture remain compatible with upstream.
+
+Upstream: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
+
+The original MIT licence and contributor history are preserved.
+
+---
 
 # Hermes Agent ☤
 <p align="center">

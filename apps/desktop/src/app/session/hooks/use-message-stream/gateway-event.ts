@@ -653,7 +653,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         const failure =
           payload?.status === 'error'
             ? {
-                error: coerceGatewayText(payload.error).trim() || finalText || 'Hermes reported an error',
+                error: coerceGatewayText(payload.error).trim() || finalText || 'Benaiah reported an error',
                 partial: Boolean(payload.partial)
               }
             : undefined
@@ -1025,7 +1025,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         // straight to dismissNotification(key).
         clearAgentNotice((event.payload as AgentNoticePayload | undefined)?.key)
       } else if (event.type === 'error') {
-        const errorMessage = payload?.message || 'Hermes reported an error'
+        const errorMessage = payload?.message || 'Benaiah reported an error'
         const looksLikeProviderSetup = isProviderSetupErrorMessage(errorMessage)
 
         // A turn that errors out has also ended — drop any open blocking prompt
@@ -1061,7 +1061,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           notify({
             id: `gateway-error:${errorMessage}`,
             kind: 'error',
-            title: 'Hermes error',
+            title: 'Benaiah error',
             message: errorMessage
           })
         }

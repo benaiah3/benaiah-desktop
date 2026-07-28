@@ -1,10 +1,10 @@
 {
-  "name": "hermes",
-  "productName": "Hermes",
+  "name": "benaiah-desktop",
+  "productName": "Benaiah",
   "private": true,
   "version": "0.17.0",
-  "description": "Native desktop shell for Hermes Agent.",
-  "author": "Nous Research",
+  "description": "Native desktop shell for Benaiah.",
+  "author": "Benaiah AI",
   "type": "module",
   "main": "dist/electron-main.mjs",
   "engines": {
@@ -169,18 +169,19 @@
   },
   "build": {
     "electronVersion": "40.10.2",
-    "appId": "com.nousresearch.hermes",
-    "productName": "Hermes",
-    "executableName": "Hermes",
+    "appId": "ai.benaiah.desktop",
+    "productName": "Benaiah",
+    "executableName": "Benaiah",
     "protocols": [
       {
-        "name": "Hermes Protocol",
+        "name": "Benaiah Protocol",
         "schemes": [
+          "benaiah",
           "hermes"
         ]
       }
     ],
-    "artifactName": "Hermes-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Benaiah-${version}-${os}-${arch}.${ext}",
     "icon": "assets/icon",
     "directories": {
       "output": "release"
@@ -216,12 +217,12 @@
       "entitlements": "electron/entitlements.mac.plist",
       "entitlementsInherit": "electron/entitlements.mac.inherit.plist",
       "extendInfo": {
-        "CFBundleDisplayName": "Hermes",
-        "CFBundleExecutable": "Hermes",
-        "CFBundleName": "Hermes",
-        "NSAudioCaptureUsageDescription": "Hermes uses audio capture for voice conversations.",
-        "NSCameraUsageDescription": "Hermes uses the camera when a plugin or feature you enable requests it.",
-        "NSMicrophoneUsageDescription": "Hermes uses the microphone for voice input and voice conversations."
+        "CFBundleDisplayName": "Benaiah",
+        "CFBundleExecutable": "Benaiah",
+        "CFBundleName": "Benaiah",
+        "NSAudioCaptureUsageDescription": "Benaiah uses audio capture for voice conversations.",
+        "NSCameraUsageDescription": "Benaiah uses the camera when a plugin or feature you enable requests it.",
+        "NSMicrophoneUsageDescription": "Benaiah uses the microphone for voice input and voice conversations."
       },
       "gatekeeperAssess": false,
       "hardenedRuntime": true,
@@ -231,7 +232,7 @@
       ]
     },
     "dmg": {
-      "title": "Install Hermes",
+      "title": "Install Benaiah",
       "backgroundColor": "#f5f5f7",
       "iconSize": 96,
       "window": {
@@ -253,7 +254,7 @@
       ]
     },
     "win": {
-      "legalTrademarks": "Hermes",
+      "legalTrademarks": "Benaiah",
       "target": [
         "nsis",
         "msi"
@@ -262,8 +263,8 @@
     },
     "linux": {
       "category": "Development",
-      "maintainer": "Nous Research <support@nousresearch.com>",
-      "synopsis": "Native desktop shell for Hermes Agent.",
+      "maintainer": "Benaiah AI",
+      "synopsis": "Native desktop shell for Benaiah.",
       "target": [
         "AppImage",
         "deb",
@@ -274,8 +275,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "shortcutName": "Hermes",
-      "uninstallDisplayName": "Hermes",
+      "shortcutName": "Benaiah",
+      "uninstallDisplayName": "Benaiah",
       "warningsAsErrors": false
     }
   }
