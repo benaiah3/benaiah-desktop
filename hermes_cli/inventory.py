@@ -273,6 +273,14 @@ def build_models_payload(
     if featured:
         _apply_featured(rows)
 
+    # Benaiah Desktop is backed by a managed OpenAI-compatible endpoint. Keep
+    # its deployment hostname out of the product UI while preserving the
+    # provider slug used for routing and model switching.
+    for row in rows:
+        api_url = str(row.get("api_url") or "").strip().lower()
+        if api_url.startswith(("https://benaiah-cli-gateway.vercel.app/", "https://benaiah.ai/api/cli/")):
+            row["name"] = "Benaiah"
+
     return {
         "providers": rows,
         "model": ctx.current_model,

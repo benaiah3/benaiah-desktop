@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 
 from hermes_cli.inventory import (
     ConfigContext,
@@ -966,6 +967,35 @@ def test_build_models_payload_keeps_static_provider_models_from_providers_dict()
     assert rows[0]["slug"] == "static-gateway"
     assert rows[0]["models"] == ["claude-3-7-sonnet", "claude-sonnet-4"]
     assert rows[0]["total_models"] == 2
+
+
+@pytest.mark.parametrize(
+    ("name", "api_url"),
+    [
+        ("benaiah-cli-gateway.vercel.app", "https://benaiah-cli-gateway.vercel.app/api/cli/v1"),
+        ("benaiah.ai", "https://benaiah.ai/api/cli/v1"),
+    ],
+)
+def test_build_models_payload_brands_managed_benaiah_gateway(name, api_url):
+    rows = [
+        {
+            "slug": "custom",
+            "name": name,
+            "models": ["benaiah-auto", "gpt-5.6-luna"],
+            "total_models": 2,
+            "is_current": True,
+            "is_user_defined": True,
+            "source": "user-config",
+            "api_url": api_url,
+        }
+    ]
+    with _list_auth_returning(rows):
+        payload = build_models_payload(_empty_ctx())
+
+    provider = next(row for row in payload["providers"] if row.get("api_url") == api_url)
+    assert provider["name"] == "Benaiah"
+    assert provider["slug"] == "custom"
+    assert provider["models"] == ["benaiah-auto", "gpt-5.6-luna"]
 
 
 def test_build_models_payload_no_max_models_returns_full_list():

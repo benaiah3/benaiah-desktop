@@ -62,7 +62,7 @@ beforeEach(() => {
   getEnvVars.mockResolvedValue({})
   disconnectOAuthProvider.mockResolvedValue({ ok: true, provider: 'nous' })
   listOAuthProviders.mockResolvedValue({
-    providers: [provider('nous', true), provider('minimax-oauth', false)]
+    providers: [provider('nous', false), provider('minimax-oauth', true)]
   })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
@@ -87,12 +87,12 @@ describe('ProvidersSettings', () => {
   it('disconnects a connected provider account and refreshes the accounts list', async () => {
     await renderProvidersSettings()
 
-    const remove = await screen.findByRole('button', { name: 'Remove Nous Portal' })
+    const remove = await screen.findByRole('button', { name: 'Remove MiniMax' })
     await act(async () => {
       fireEvent.click(remove)
     })
 
-    await waitFor(() => expect(disconnectOAuthProvider).toHaveBeenCalledWith('nous'))
+    await waitFor(() => expect(disconnectOAuthProvider).toHaveBeenCalledWith('minimax-oauth'))
     expect(listOAuthProviders).toHaveBeenCalledTimes(2)
   })
 
@@ -100,10 +100,10 @@ describe('ProvidersSettings', () => {
     await renderProvidersSettings()
 
     await act(async () => {
-      fireEvent.click(await screen.findByText('Nous Portal'))
+      fireEvent.click(await screen.findByText('MiniMax'))
     })
 
-    expect(startManualProviderOAuth).toHaveBeenCalledWith('nous')
+    expect(startManualProviderOAuth).toHaveBeenCalledWith('minimax-oauth')
     expect(disconnectOAuthProvider).not.toHaveBeenCalled()
   })
 

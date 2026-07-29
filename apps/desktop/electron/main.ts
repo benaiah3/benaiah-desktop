@@ -5146,7 +5146,7 @@ function buildApplicationMenu() {
       label: APP_NAME,
       submenu: [
         { label: `About ${APP_NAME}`, click: () => showAboutPanelFresh() },
-        checkForUpdatesItem,
+        ...(!IS_PACKAGED ? [checkForUpdatesItem] : []),
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -5239,7 +5239,7 @@ function buildApplicationMenu() {
   template.push({
     label: 'Help',
     role: 'help',
-    submenu: [checkForUpdatesItem]
+    submenu: !IS_PACKAGED ? [checkForUpdatesItem] : []
   })
 
   return Menu.buildFromTemplate(template)
@@ -6602,7 +6602,7 @@ function decryptDesktopSecret(secret) {
 // ---------------------------------------------------------------------------
 
 const BENAIAH_ACCOUNT_GATEWAY =
-  process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah-cli-gateway.vercel.app/api/cli/v1'
+  process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah.ai/api/cli/v1'
 
 function benaiahAccountLinkPath() {
   return path.join(app.getPath('userData'), 'benaiah-account-link.json')

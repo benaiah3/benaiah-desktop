@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { modePref, skinPref } from './context'
 import { DEFAULT_SKIN_NAME } from './presets'
 
+it('uses the monochrome skin for fresh profiles', () => {
+  expect(DEFAULT_SKIN_NAME).toBe('mono')
+})
+
 // Skin and mode share one per-profile contract, so assert it once over both.
 interface Pref {
   resolve: (profile: string) => string

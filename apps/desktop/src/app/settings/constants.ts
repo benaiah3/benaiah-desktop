@@ -41,9 +41,9 @@ export const CONTROL_TEXT = 'text-xs'
 export const PROVIDER_GROUPS: ProviderPrefix[] = [
   {
     prefix: 'NOUS_',
-    name: 'Nous Portal',
-    description: 'Hosted Benaiah & Nous-trained models',
-    docsUrl: 'https://portal.nousresearch.com',
+    name: 'Benaiah account',
+    description: 'Managed intelligence through your Benaiah plan',
+    docsUrl: 'https://benaiah.ai/settings#profile',
     priority: 0
   },
   {

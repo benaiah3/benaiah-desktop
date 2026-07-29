@@ -125,12 +125,14 @@ function buildProviderKeyGroups(vars: Record<string, EnvVarInfo>): ProviderKeyGr
 // catalog below.
 function OAuthPicker({
   disconnecting,
+  onConnectBenaiah,
   onDisconnect,
   onTerminalDisconnect,
   onWantApiKey,
   providers
 }: {
   disconnecting: null | string
+  onConnectBenaiah: () => void
   onDisconnect: (provider: OAuthProvider) => void
   onTerminalDisconnect: (provider: OAuthProvider) => void
   onWantApiKey: () => void
@@ -147,8 +149,8 @@ function OAuthPicker({
 
   const select = (p: OAuthProvider) => startManualProviderOAuth(p.id)
 
-  const featured = ordered.find(p => p.id === FEATURED_ID && !p.status?.logged_in) ?? null
-  const rest = featured ? ordered.filter(p => p.id !== FEATURED_ID) : ordered
+  const featured = ordered.find(p => p.id === FEATURED_ID) ?? null
+  const rest = ordered.filter(p => p.id !== FEATURED_ID)
   // Keep connected accounts grouped and always visible; only the unconnected
   // providers hide behind the disclosure, so the page leads with what's set up.
   // Both lists preserve `sortProviders` order (curated priority, then name).
@@ -174,7 +176,12 @@ function OAuthPicker({
       <p className="-mt-2 mb-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
         {p.intro}
       </p>
-      {featured && <FeaturedProviderRow onSelect={select} provider={featured} />}
+      {featured && (
+        <FeaturedProviderRow
+          onSelect={() => onConnectBenaiah()}
+          provider={{ ...featured, status: { ...featured.status, logged_in: false } }}
+        />
+      )}
       {/* Slot #2 — always visible, matching onboarding / CANONICAL_PROVIDERS. */}
       <FireworksProviderRow onClick={onWantApiKey} />
       {connected.length > 0 && (
@@ -343,6 +350,7 @@ export function ProvidersSettings({
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([])
   const [openProvider, setOpenProvider] = useState<null | string>(null)
   const [disconnecting, setDisconnecting] = useState<null | string>(null)
+  const [connectingBenaiah, setConnectingBenaiah] = useState(false)
   // Free-text filter for the API-keys view (provider name / env-var key / desc).
   const [keyQuery, setKeyQuery] = useState('')
   // The onboarding overlay owns the OAuth flow. Watch its `manual` flag so we
@@ -430,6 +438,50 @@ export function ProvidersSettings({
     }
   }
 
+  async function handleConnectBenaiah() {
+    if (connectingBenaiah) {
+      return
+    }
+
+    setConnectingBenaiah(true)
+
+    try {
+      await window.hermesDesktop.benaiahAccount.start()
+      notify({
+        durationMs: 8_000,
+        kind: 'info',
+        title: 'Complete sign-in in your browser',
+        message: 'Benaiah will connect your account and model catalogue automatically.'
+      })
+
+      for (let attempt = 0; attempt < 150; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 2_000))
+        const result = await window.hermesDesktop.benaiahAccount.status('default')
+
+        if (!result.linked) {
+          continue
+        }
+
+        notify({
+          durationMs: 4_000,
+          kind: 'success',
+          title: 'Benaiah account connected',
+          message: 'Your plan, usage and model catalogue are now available.'
+        })
+        onConfigSaved?.()
+        onMainModelChanged?.('custom', 'benaiah-auto')
+
+        return
+      }
+
+      throw new Error('Benaiah sign-in timed out. Try connecting again.')
+    } catch (error) {
+      notifyError(error, 'Could not connect your Benaiah account')
+    } finally {
+      setConnectingBenaiah(false)
+    }
+  }
+
   if (!vars) {
     return <SettingsSkeleton search sections={[{ rows: 6 }]} />
   }
@@ -498,6 +550,7 @@ export function ProvidersSettings({
     <SettingsContent>
       <OAuthPicker
         disconnecting={disconnecting}
+        onConnectBenaiah={() => void handleConnectBenaiah()}
         onDisconnect={provider => void handleDisconnect(provider)}
         onTerminalDisconnect={handleTerminalDisconnect}
         onWantApiKey={() => onViewChange('keys')}
