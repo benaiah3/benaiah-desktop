@@ -7169,6 +7169,11 @@ def _(rid, params: dict) -> dict:
                             "title": s.get("title") or "",
                             "preview": s.get("preview") or "",
                             "started_at": s.get("started_at") or 0,
+                            # Desktop mirrors its local sidebar pins into this
+                            # durable backend flag. Remote clients must read
+                            # the same value so they never maintain a second,
+                            # divergent set of pinned conversations.
+                            "pinned": bool(s.get("pinned")),
                             "message_count": s.get("message_count") or 0,
                             "source": s.get("source") or "",
                         }

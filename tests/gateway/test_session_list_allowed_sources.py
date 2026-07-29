@@ -102,3 +102,33 @@ def test_session_list_preserves_ordering_after_filter(monkeypatch):
     ids = [s["id"] for s in resp["result"]["sessions"]]
 
     assert ids == ["newest", "middle", "also-visible", "oldest"]
+
+
+def test_session_list_projects_durable_sidebar_pin_state(monkeypatch):
+    """Remote surfaces share Desktop's backend-mirrored pin state."""
+    monkeypatch.setattr(
+        server,
+        "_get_db",
+        lambda: _StubDB(
+            [
+                {
+                    "id": "pinned",
+                    "source": "desktop",
+                    "started_at": 2,
+                    "pinned": 1,
+                },
+                {
+                    "id": "recent",
+                    "source": "desktop",
+                    "started_at": 1,
+                    "pinned": 0,
+                },
+            ]
+        ),
+    )
+
+    resp = _call()
+    rows = resp["result"]["sessions"]
+
+    assert rows[0]["pinned"] is True
+    assert rows[1]["pinned"] is False
