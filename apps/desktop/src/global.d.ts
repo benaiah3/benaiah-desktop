@@ -145,6 +145,16 @@ declare global {
         }>
         reopen: () => Promise<{ opened: boolean }>
       }
+      benaiahRemote: {
+        createPairing: () => Promise<{
+          linked: boolean
+          online: boolean
+          state: 'connecting' | 'offline' | 'online' | 'signed-out' | 'stopped'
+          deviceName?: string
+          expiresAt?: string
+          url?: string
+        }>
+      }
       openPreviewInBrowser?: (url: string) => Promise<void>
       fetchLinkTitle: (url: string) => Promise<string>
       sanitizeWorkspaceCwd: (cwd?: null | string) => Promise<{ cwd: string; sanitized: boolean }>

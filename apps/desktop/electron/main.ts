@@ -91,7 +91,6 @@ import { createFirstRunSetupGate } from './first-run-setup-gate'
 import { readDirForIpc } from './fs-read-dir'
 import { probeGatewayWebSocket } from './gateway-ws-probe'
 import { scanGitRepos } from './git-repo-scan'
-import { RemoteAccessHost } from './remote-access-host'
 import {
   fileDiffVsHead,
   repoStatus,
@@ -153,6 +152,7 @@ import { fetchPrimaryProfileSessions } from './profile-session-routing'
 import { createQuickEntryShortcut, quickEntryWindowBounds, sanitizeQuickEntrySettings } from './quick-entry'
 import { type ActiveWork, mergeActiveWork, normalizeActiveWork, quitPromptFor } from './quit-guard'
 import { createReleaseUpdaterController } from './release-updater'
+import { RemoteAccessHost, type RemoteHostStatus } from './remote-access-host'
 import * as remoteLifecycle from './remote-lifecycle'
 import {
   RemoteLivenessTracker,
@@ -6672,6 +6672,7 @@ const BENAIAH_REMOTE_API =
   process.env.BENAIAH_REMOTE_API || 'https://benaiah.ai/api'
 
 let benaiahRemoteHost: RemoteAccessHost | null = null
+let benaiahRemoteStatus: RemoteHostStatus = { state: 'stopped' }
 
 function benaiahAccountLinkPath() {
   return path.join(app.getPath('userData'), 'benaiah-account-link.json')
@@ -6782,6 +6783,7 @@ function readOrCreateBenaiahRemoteIdentity(): BenaiahRemoteIdentity {
 function stopBenaiahRemoteAccess() {
   benaiahRemoteHost?.stop()
   benaiahRemoteHost = null
+  benaiahRemoteStatus = { state: 'stopped' }
 }
 
 function startBenaiahRemoteAccess() {
@@ -6802,10 +6804,54 @@ function startBenaiahRemoteAccess() {
     localGatewayUrl: () => freshGatewayWsUrl('default'),
     publicKey: identity.publicKey,
     onStatus: status => {
+      benaiahRemoteStatus = status
       rememberLog(`[remote-access] ${status.state}${status.state === 'offline' ? `: ${status.reason}` : ''}`)
     }
   })
   benaiahRemoteHost.start()
+}
+
+async function createBenaiahRemotePairing() {
+  const account = readBenaiahAccount()
+
+  if (!account) {
+    return {
+      linked: false,
+      online: false,
+      state: 'signed-out'
+    }
+  }
+
+  startBenaiahRemoteAccess()
+  for (let attempt = 0; attempt < 40 && benaiahRemoteStatus.state === 'connecting'; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
+  const identity = readOrCreateBenaiahRemoteIdentity()
+  const pairing: any = await fetchJson(`${BENAIAH_REMOTE_API}/remote/pair`, null, {
+    method: 'POST',
+    bearer: account.token,
+    body: {
+      role: 'host',
+      deviceId: identity.deviceId
+    },
+    timeoutMs: 15_000
+  })
+
+  if (
+    !/^https:\/\/benaiah\.ai\/remote#pair=/.test(String(pairing?.url || ''))
+    || !pairing?.expiresAt
+  ) {
+    throw new Error('Benaiah did not return a valid mobile pairing code.')
+  }
+
+  return {
+    linked: true,
+    online: benaiahRemoteStatus.state === 'online',
+    state: benaiahRemoteStatus.state,
+    deviceName: String(pairing?.device?.name || os.hostname() || 'My Mac'),
+    expiresAt: String(pairing.expiresAt),
+    url: String(pairing.url)
+  }
 }
 
 function readBenaiahAccountLink(): { linkUrl: string; token: string } | null {
@@ -10766,6 +10812,7 @@ ipcMain.handle('hermes:openExternal', (_event, url) => {
 ipcMain.handle('hermes:benaiah-account:start', () => beginBenaiahAccountLink())
 ipcMain.handle('hermes:benaiah-account:status', (_event, profile) => benaiahAccountLinkStatus(profile))
 ipcMain.handle('hermes:benaiah-account:reopen', () => reopenBenaiahAccountLink())
+ipcMain.handle('hermes:benaiah-remote:pairing', () => createBenaiahRemotePairing())
 
 // ── Find-in-page (Ctrl/Cmd+F) ─────────────────────────────────────────────
 // The desktop supports multiple BrowserWindows (one primary plus any

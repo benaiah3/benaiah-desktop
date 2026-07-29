@@ -16,6 +16,7 @@ import {
   Keyboard,
   KeyRound,
   Package,
+  QrCode,
   RefreshCw,
   Settings2,
   Upload,
@@ -41,6 +42,7 @@ import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
 import { NotificationsSettings } from './notifications-settings'
 import { PluginsSettings } from './plugins-settings'
 import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from './providers-settings'
+import { RemoteSettings } from './remote-settings'
 import { SessionsSettings } from './sessions-settings'
 import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
 
@@ -53,6 +55,7 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'notifications',
   'billing',
   'plugins',
+  'remote',
   'sessions',
   'about'
 ]
@@ -243,8 +246,15 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
       onSelect: () => setActiveView('sessions')
     },
     {
-      active: activeView === 'about',
+      active: activeView === 'remote',
       gapBefore: true,
+      icon: QrCode,
+      id: 'remote',
+      label: 'Remote',
+      onSelect: () => setActiveView('remote')
+    },
+    {
+      active: activeView === 'about',
       icon: Info,
       id: 'about',
       label: t.settings.nav.about,
@@ -318,6 +328,8 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
             <NotificationsSettings />
           ) : activeView === 'billing' ? (
             <BillingSettings />
+          ) : activeView === 'remote' ? (
+            <RemoteSettings />
           ) : activeView === 'plugins' ? (
             <PluginsSettings />
           ) : (

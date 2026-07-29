@@ -130,6 +130,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     status: profile => ipcRenderer.invoke('hermes:benaiah-account:status', profile),
     reopen: () => ipcRenderer.invoke('hermes:benaiah-account:reopen')
   },
+  benaiahRemote: {
+    createPairing: () => ipcRenderer.invoke('hermes:benaiah-remote:pairing')
+  },
   openPreviewInBrowser: url => ipcRenderer.invoke('hermes:openPreviewInBrowser', url),
   fetchLinkTitle: url => ipcRenderer.invoke('hermes:fetchLinkTitle', url),
   sanitizeWorkspaceCwd: cwd => ipcRenderer.invoke('hermes:workspace:sanitize', cwd),
