@@ -91,6 +91,7 @@ import { createFirstRunSetupGate } from './first-run-setup-gate'
 import { readDirForIpc } from './fs-read-dir'
 import { probeGatewayWebSocket } from './gateway-ws-probe'
 import { scanGitRepos } from './git-repo-scan'
+import { RemoteAccessHost } from './remote-access-host'
 import {
   fileDiffVsHead,
   repoStatus,
@@ -6667,9 +6668,144 @@ function decryptDesktopSecret(secret) {
 
 const BENAIAH_ACCOUNT_GATEWAY =
   process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah.ai/api/cli/v1'
+const BENAIAH_REMOTE_API =
+  process.env.BENAIAH_REMOTE_API || 'https://benaiah.ai/api'
+
+let benaiahRemoteHost: RemoteAccessHost | null = null
 
 function benaiahAccountLinkPath() {
   return path.join(app.getPath('userData'), 'benaiah-account-link.json')
+}
+
+function benaiahAccountPath() {
+  return path.join(app.getPath('userData'), 'benaiah-account.json')
+}
+
+type BenaiahAccountCredential = {
+  email: string
+  token: string
+}
+
+type BenaiahRemoteIdentity = {
+  deviceId: string
+  publicKey: string
+}
+
+function readBenaiahAccount(): BenaiahAccountCredential | null {
+  try {
+    const payload = JSON.parse(fs.readFileSync(benaiahAccountPath(), 'utf8'))
+    const token = decryptDesktopSecret(payload?.token)
+
+    return token
+      ? {
+          email: typeof payload?.email === 'string' ? payload.email : '',
+          token
+        }
+      : null
+  } catch {
+    return null
+  }
+}
+
+function readLegacyBenaiahAccountToken(): string {
+  try {
+    const config = fs.readFileSync(path.join(HERMES_HOME, 'config.yaml'), 'utf8')
+    const modelBlock = config.match(/^model:\s*\n((?:^[ \t]+.*\n?)*)/m)?.[1] || ''
+    const baseUrl = modelBlock.match(/^[ \t]+base_url:\s*["']?([^"'#\n]+)["']?/m)?.[1]?.trim() || ''
+    const apiKey = modelBlock.match(/^[ \t]+api_key:\s*["']?([^"'#\n]+)["']?/m)?.[1]?.trim() || ''
+
+    return /benaiah(?:-cli-gateway[^/]*)?(?:\.ai|\.vercel\.app)/i.test(baseUrl) && /^bna_[A-Za-z0-9_-]+$/.test(apiKey)
+      ? apiKey
+      : ''
+  } catch {
+    return ''
+  }
+}
+
+function migrateLegacyBenaiahAccount() {
+  if (readBenaiahAccount()) {
+    return
+  }
+
+  const token = readLegacyBenaiahAccountToken()
+
+  if (token) {
+    writeBenaiahAccount(token)
+  }
+}
+
+function writeBenaiahAccount(token: string, email = '') {
+  const target = benaiahAccountPath()
+
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(
+    target,
+    JSON.stringify({
+      email,
+      token: encryptDesktopSecret(token),
+      updatedAt: new Date().toISOString()
+    }),
+    { mode: 0o600 }
+  )
+}
+
+function benaiahRemoteIdentityPath() {
+  return path.join(app.getPath('userData'), 'benaiah-remote-device.json')
+}
+
+function readOrCreateBenaiahRemoteIdentity(): BenaiahRemoteIdentity {
+  try {
+    const payload = JSON.parse(fs.readFileSync(benaiahRemoteIdentityPath(), 'utf8'))
+    const deviceId = String(payload?.deviceId || '')
+    const publicKey = String(payload?.publicKey || '')
+
+    if (/^[A-Za-z0-9_-]{16,96}$/.test(deviceId) && /^[A-Za-z0-9_-]{40,512}$/.test(publicKey)) {
+      return { deviceId, publicKey }
+    }
+  } catch {
+    // Create the identity below.
+  }
+
+  const { publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
+  const identity = {
+    deviceId: crypto.randomBytes(24).toString('base64url'),
+    publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64url')
+  }
+  const target = benaiahRemoteIdentityPath()
+
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(target, JSON.stringify(identity), { mode: 0o600 })
+
+  return identity
+}
+
+function stopBenaiahRemoteAccess() {
+  benaiahRemoteHost?.stop()
+  benaiahRemoteHost = null
+}
+
+function startBenaiahRemoteAccess() {
+  const account = readBenaiahAccount()
+
+  if (!account || benaiahRemoteHost) {
+    return
+  }
+
+  const identity = readOrCreateBenaiahRemoteIdentity()
+
+  benaiahRemoteHost = new RemoteAccessHost({
+    accessToken: account.token,
+    apiBaseUrl: BENAIAH_REMOTE_API,
+    appVersion: app.getVersion(),
+    deviceId: identity.deviceId,
+    deviceName: os.hostname() || 'My Mac',
+    localGatewayUrl: () => freshGatewayWsUrl('default'),
+    publicKey: identity.publicKey,
+    onStatus: status => {
+      rememberLog(`[remote-access] ${status.state}${status.state === 'offline' ? `: ${status.reason}` : ''}`)
+    }
+  })
+  benaiahRemoteHost.start()
 }
 
 function readBenaiahAccountLink(): { linkUrl: string; token: string } | null {
@@ -6742,7 +6878,17 @@ async function benaiahAccountLinkStatus(profile?: string) {
   const pending = readBenaiahAccountLink()
 
   if (!pending) {
-    return { linked: false, pending: false }
+    const account = readBenaiahAccount()
+
+    if (account) {
+      startBenaiahRemoteAccess()
+    }
+
+    return {
+      linked: Boolean(account),
+      pending: false,
+      email: account?.email || ''
+    }
   }
 
   const usage: any = await fetchJson(`${BENAIAH_ACCOUNT_GATEWAY}/usage`, null, {
@@ -6763,12 +6909,15 @@ async function benaiahAccountLinkStatus(profile?: string) {
     api_mode: 'codex_responses'
   } as any)
 
+  const email = typeof usage?.account?.email === 'string' ? usage.account.email : ''
+  writeBenaiahAccount(pending.token, email)
   clearBenaiahAccountLink()
+  startBenaiahRemoteAccess()
 
   return {
     linked: true,
     pending: false,
-    email: typeof usage?.account?.email === 'string' ? usage.account.email : ''
+    email
   }
 }
 
@@ -11678,6 +11827,8 @@ app.whenReady().then(() => {
   // here and surfaced in Settings via the IPC state (never silent).
   applyQuickEntrySettings(readQuickEntrySettings())
   createWindow()
+  migrateLegacyBenaiahAccount()
+  startBenaiahRemoteAccess()
 
   // Win/Linux cold start: the launching hermes:// URL is in our own argv.
   const _coldStartLink = _extractDeepLink(process.argv)
@@ -11804,6 +11955,7 @@ app.on('before-quit', event => {
 
   // The always-on-top overlay isn't a "real" app window; close it so a stray
   // pet can't keep the process alive or float over a quit app.
+  stopBenaiahRemoteAccess()
   closePetOverlay()
 
   // Same for the Quick Entry composer — and release its global accelerator so a
