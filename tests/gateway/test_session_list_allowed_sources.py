@@ -132,3 +132,36 @@ def test_session_list_projects_durable_sidebar_pin_state(monkeypatch):
 
     assert rows[0]["pinned"] is True
     assert rows[1]["pinned"] is False
+
+
+def test_session_transcript_reads_without_resuming_an_agent(monkeypatch):
+    """Artifact indexes can inspect history without mutating live sessions."""
+
+    class _TranscriptDB:
+        def get_session(self, session_id):
+            return {"id": session_id}
+
+        def resolve_resume_session_id(self, session_id):
+            return f"{session_id}-tip"
+
+        def get_messages_as_conversation(self, session_id, include_ancestors=True):
+            assert session_id == "stored-tip"
+            assert include_ancestors is True
+            return [
+                {"role": "user", "content": "Make a report"},
+                {"role": "assistant", "content": "[Report](/tmp/report.pdf)"},
+            ]
+
+    monkeypatch.setattr(server, "_get_db", lambda: _TranscriptDB())
+
+    resp = server.handle_request(
+        {
+            "id": "1",
+            "method": "session.transcript",
+            "params": {"session_id": "stored"},
+        }
+    )
+
+    assert resp["result"]["session_id"] == "stored-tip"
+    assert resp["result"]["count"] == 2
+    assert len(resp["result"]["messages"]) == 2

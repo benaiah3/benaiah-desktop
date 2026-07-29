@@ -10145,6 +10145,44 @@ def _(rid, params: dict) -> dict:
     )
 
 
+@method("session.transcript")
+def _(rid, params: dict) -> dict:
+    """Read a stored transcript without creating or resuming an agent.
+
+    Remote workspace indexes (notably Artifacts) need the same persisted
+    messages Desktop reads through its REST session endpoint. Using
+    ``session.resume`` for that would instantiate up to thirty agents merely
+    to build an index, so expose the read-only projection directly instead.
+    """
+    target = str(params.get("session_id") or "").strip()
+    if not target:
+        return _err(rid, 4006, "session_id required")
+
+    with _profile_db(params) as db:
+        if db is None:
+            return _db_unavailable_error(rid, code=5006)
+        found = db.get_session(target)
+        if not found:
+            return _err(rid, 4007, "session not found")
+        try:
+            resolved = db.resolve_resume_session_id(target) or target
+            history = db.get_messages_as_conversation(
+                resolved,
+                include_ancestors=True,
+            )
+        except Exception as exc:
+            return _err(rid, 5006, str(exc))
+
+    return _ok(
+        rid,
+        {
+            "session_id": resolved,
+            "count": len(history),
+            "messages": _history_to_messages(history),
+        },
+    )
+
+
 @method("session.undo")
 def _(rid, params: dict) -> dict:
     session, err = _sess(params, rid)
