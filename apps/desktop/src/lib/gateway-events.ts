@@ -11,6 +11,16 @@ function asRecord(payload: unknown): Record<string, unknown> {
   return payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
 }
 
+export function remoteFocusStoredSessionId(event: RpcEventLike): string {
+  if (event.type !== 'session.remote_focus') {
+    return ''
+  }
+
+  const value = asRecord(event.payload).stored_session_id
+
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 /**
  * Unscoped stream events that must stay pinned to the session that received
  * ``message.start`` after the user switches chats mid-turn (#47709 / #48281).

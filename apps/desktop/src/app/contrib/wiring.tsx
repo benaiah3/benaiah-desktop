@@ -26,6 +26,7 @@ import { RemoteDisplayBanner } from '@/components/remote-display-banner'
 import { emitGatewayEvent } from '@/contrib/events'
 import { getSessionMessages, triggerCronJob } from '@/hermes'
 import { type ChatMessage, chatMessageText, preserveLocalAssistantErrors, toChatMessages } from '@/lib/chat-messages'
+import { remoteFocusStoredSessionId } from '@/lib/gateway-events'
 import { sessionMessagesSignature } from '@/lib/session-signatures'
 import { isMessagingSource } from '@/lib/session-source'
 import { latestSessionTodos } from '@/lib/todos'
@@ -662,9 +663,19 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   const handleGatewayEventWithPlugins = useCallback(
     (event: Parameters<typeof handleDesktopGatewayEvent>[0]) => {
       emitGatewayEvent(event)
+      const remoteStoredSessionId = remoteFocusStoredSessionId(event)
+
+      if (remoteStoredSessionId) {
+        // Remote is a viewport onto this Desktop, not a separate inbox.
+        // Resume even when this row is already selected: the live projection
+        // carries the phone's just-accepted user message and prevents a
+        // manual away-and-back refresh from being required.
+        void resumeSession(remoteStoredSessionId, true)
+      }
+
       handleDesktopGatewayEvent(event)
     },
-    [handleDesktopGatewayEvent]
+    [handleDesktopGatewayEvent, resumeSession]
   )
 
   useGatewayBoot({

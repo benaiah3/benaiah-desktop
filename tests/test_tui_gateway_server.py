@@ -921,6 +921,52 @@ def test_write_json_drops_detached_ws_frames(monkeypatch):
         server._sessions.pop("detached-sid", None)
 
 
+class _RecordingTransport:
+    def __init__(self):
+        self.frames = []
+        self._closed = False
+
+    def write(self, frame):
+        self.frames.append(frame)
+        return True
+
+
+def test_write_json_fans_session_events_to_mirrored_transport():
+    owner = _RecordingTransport()
+    phone = _RecordingTransport()
+    server._sessions["mirror-sid"] = {
+        "transport": owner,
+        "observer_transports": {phone},
+        "mirror_enabled": True,
+    }
+    frame = {
+        "jsonrpc": "2.0",
+        "method": "event",
+        "params": {"session_id": "mirror-sid", "type": "message.complete"},
+    }
+    try:
+        assert server.write_json(frame) is True
+        assert owner.frames == [frame]
+        assert phone.frames == [frame]
+    finally:
+        server._sessions.pop("mirror-sid", None)
+
+
+def test_mirrored_transport_claim_preserves_previous_owner_as_observer():
+    phone = _RecordingTransport()
+    desktop = _RecordingTransport()
+    session = {
+        "transport": phone,
+        "observer_transports": set(),
+        "mirror_enabled": True,
+    }
+
+    server._claim_session_transport(session, desktop)
+
+    assert session["transport"] is desktop
+    assert session["observer_transports"] == {phone}
+
+
 def test_tui_verbose_tool_details_fail_closed_when_redaction_fails(monkeypatch):
     redact_module = types.ModuleType("agent.redact")
 
@@ -13182,6 +13228,26 @@ def test_close_sessions_for_transport_closes_flagged_repoints_rest(monkeypatch):
         server._close_sessions_for_transport(transport, end_reason="ws_disconnect")
         assert seen == [("a", "ws_disconnect")]  # only the flagged one closed
         assert server._sessions["b"]["transport"] is server._detached_ws_transport  # re-pointed
+    finally:
+        server._sessions.clear()
+
+
+def test_close_sessions_for_transport_promotes_mirrored_observer(monkeypatch):
+    monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 0)
+    desktop = _RecordingTransport()
+    phone = _RecordingTransport()
+    server._sessions.clear()
+    server._sessions["shared"] = {
+        "transport": desktop,
+        "observer_transports": {phone},
+        "mirror_enabled": True,
+        "close_on_disconnect": False,
+    }
+    try:
+        reaped, detached = server._close_sessions_for_transport(desktop)
+        assert (reaped, detached) == (0, 0)
+        assert server._sessions["shared"]["transport"] is phone
+        assert server._sessions["shared"]["observer_transports"] == set()
     finally:
         server._sessions.clear()
 

@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
-import { gatewayEventRequiresSessionId, resolveGatewayEventSessionId } from './gateway-events'
+import {
+  gatewayEventRequiresSessionId,
+  remoteFocusStoredSessionId,
+  resolveGatewayEventSessionId
+} from './gateway-events'
+
+describe('remoteFocusStoredSessionId', () => {
+  it('returns the durable session selected by a phone submit', () => {
+    expect(
+      remoteFocusStoredSessionId({
+        type: 'session.remote_focus',
+        payload: { stored_session_id: '  stored-42  ' }
+      })
+    ).toBe('stored-42')
+  })
+
+  it('ignores malformed and unrelated events', () => {
+    expect(remoteFocusStoredSessionId({ type: 'message.start', payload: { stored_session_id: 'x' } })).toBe('')
+    expect(remoteFocusStoredSessionId({ type: 'session.remote_focus', payload: { stored_session_id: 42 } })).toBe('')
+  })
+})
 
 describe('gateway event routing', () => {
   it('drops only unscoped subagent events (genuinely background work)', () => {

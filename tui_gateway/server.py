@@ -945,6 +945,19 @@ def _close_sessions_for_transport(
             _close_session_by_id(sid, end_reason=end_reason)
             reaped += 1
         else:
+            observers = [
+                observer
+                for observer in set(session.get("observer_transports") or ())
+                if not _transport_is_dead(observer)
+            ]
+            if session.get("mirror_enabled") and observers:
+                # Keep the shared session alive on the remaining viewport. A
+                # later Desktop resume claims primary ownership again and
+                # preserves this phone as an observer.
+                promoted = observers[0]
+                session["transport"] = promoted
+                session["observer_transports"] = set(observers[1:])
+                continue
             # Point detached sessions at the drop sentinel (NOT real stdio) so
             # _ws_session_is_orphaned recognizes them and the grace-reap can
             # actually fire; a standalone `hermes --tui` keeps real _stdio.
@@ -1334,8 +1347,35 @@ def write_json(obj: dict) -> bool:
     """
     if obj.get("method") == "event":
         sid = ((obj.get("params") or {}).get("session_id")) or ""
-        if sid and (t := (_sessions.get(sid) or {}).get("transport")) is not None:
-            return t.write(obj)
+        session = _sessions.get(sid) or {}
+        if sid and (t := session.get("transport")) is not None:
+            # A Remote phone is a second viewport onto the same live session,
+            # not a replacement owner. Mirror transports receive the identical
+            # ordered event stream while the desktop remains the primary
+            # transport. This keeps message/reasoning/tool/terminal events in
+            # lockstep on both screens.
+            observers = set(session.get("observer_transports") or ())
+            targets = [t, *(observer for observer in observers if observer is not t)]
+            wrote = False
+            dead: list[Transport] = []
+            for target in targets:
+                try:
+                    wrote = bool(target.write(obj)) or wrote
+                except Exception:
+                    dead.append(target)
+                    logger.debug(
+                        "session mirror write failed sid=%s",
+                        sid,
+                        exc_info=True,
+                    )
+            if dead:
+                with _sessions_lock:
+                    current = _sessions.get(sid)
+                    if current is session:
+                        current_observers = set(current.get("observer_transports") or ())
+                        current_observers.difference_update(dead)
+                        current["observer_transports"] = current_observers
+            return wrote
 
     return (current_transport() or _stdio_transport).write(obj)
 
@@ -1371,6 +1411,43 @@ def unregister_live_transport(transport: Transport | None) -> None:
     """Stop tracking a transport (call on disconnect). Idempotent."""
     with _live_transports_lock:
         _live_transports.discard(transport)
+    if transport is None:
+        return
+    # Observer transports never own the session and therefore are not covered
+    # by _close_sessions_for_transport. Prune them here so a disconnected phone
+    # cannot accumulate in a long-lived desktop session.
+    with _sessions_lock:
+        for session in _sessions.values():
+            observers = set(session.get("observer_transports") or ())
+            if transport in observers:
+                observers.discard(transport)
+                session["observer_transports"] = observers
+
+
+def _observe_session(session: dict, transport: Transport | None = None) -> None:
+    """Attach a non-owning live viewport to ``session``."""
+    target = transport or current_transport()
+    if target is None or target is session.get("transport"):
+        return
+    with _sessions_lock:
+        observers = set(session.get("observer_transports") or ())
+        observers.add(target)
+        session["observer_transports"] = observers
+
+
+def _claim_session_transport(session: dict, transport: Transport | None) -> None:
+    """Move primary ownership while preserving a mirrored viewport."""
+    if transport is None:
+        return
+    previous = session.get("transport")
+    if session.get("mirror_enabled") and previous is not None and previous is not transport:
+        observers = set(session.get("observer_transports") or ())
+        observers.add(previous)
+        session["observer_transports"] = observers
+    session["transport"] = transport
+    observers = set(session.get("observer_transports") or ())
+    observers.discard(transport)
+    session["observer_transports"] = observers
 
 
 def _broadcast_global_event(event: str, payload: dict | None = None) -> None:
@@ -7064,6 +7141,7 @@ def _(rid, params: dict) -> dict:
             "inflight_turn": None,
             "last_active": now,
             "model_override": session_model_override,
+            "mirror_enabled": is_truthy_value(params.get("mirror", False)),
             "create_reasoning_override": create_reasoning_override,
             "create_service_tier_override": create_service_tier_override,
             "parent_session_id": parent_session_id,
@@ -7401,6 +7479,7 @@ def _(rid, params: dict) -> dict:
     # local profile's state.db. None/own profile → the launch profile (unchanged).
     profile = (params.get("profile") or "").strip() or None
     profile_home = _profile_home(profile)
+    mirror_requested = is_truthy_value(params.get("mirror", False))
 
     # In a profile scope, the agent OWNS a long-lived db handle bound to that
     # profile (do NOT auto-close it here). Otherwise reuse the shared launch db.
@@ -7459,12 +7538,15 @@ def _(rid, params: dict) -> dict:
     )
 
     def _reuse_live_payload(sid: str, session: dict) -> dict:
+        if mirror_requested:
+            session["mirror_enabled"] = True
+            _observe_session(session, current_transport())
         payload = _live_session_payload(
             sid,
             session,
             cols=cols,
             touch=True,
-            transport=current_transport() or _stdio_transport,
+            transport=None if mirror_requested else current_transport() or _stdio_transport,
         )
         payload["resumed"] = target
         # A lazy watch session never owns a run loop, so its payload's running
@@ -7517,6 +7599,7 @@ def _(rid, params: dict) -> dict:
             profile_home=profile_home,
             lazy=True,
         )
+        record["mirror_enabled"] = mirror_requested
         if (live := _claim_or_reuse_live(sid, target, record, lease)) is not None:
             return _ok(rid, _reuse_live_payload(*live))
         # A delegated child mid-run emits no session events of its own — report
@@ -7608,6 +7691,7 @@ def _(rid, params: dict) -> dict:
             model_override=overrides.get("model_override"),
             resume_runtime_overrides=overrides or None,
         )
+        record["mirror_enabled"] = mirror_requested
         if (live := _claim_or_reuse_live(sid, target, record, lease)) is not None:
             return _ok(rid, _reuse_live_payload(*live))
 
@@ -7996,7 +8080,7 @@ def _live_session_payload(
         if cols is not None:
             session["cols"] = cols
         if transport is not None:
-            session["transport"] = transport
+            _claim_session_transport(session, transport)
         if touch:
             session["last_active"] = time.time()
         in_memory_history = list(session.get("display_history_prefix") or []) + list(
@@ -11012,11 +11096,16 @@ def _(rid, params: dict) -> dict:
         )
     isolation_cfg = _load_dashboard_process_isolation_config()
     turn_isolation = _session_uses_compute_host(session, isolation_cfg)
-    # Re-bind to the current client transport for this request. This keeps
-    # streaming events on the active websocket even if an earlier disconnect
-    # or fallback moved the session transport to stdio.
-    if (t := current_transport()) is not None:
-        session["transport"] = t
+    # A mirrored Remote submit must not steal the session's event stream from
+    # Desktop. It becomes an observer; ordinary callers retain the historical
+    # owner-rebind behaviour used by reconnect/resume.
+    t = current_transport()
+    mirrored_submit = is_truthy_value(params.get("mirror", False))
+    if mirrored_submit:
+        session["mirror_enabled"] = True
+        _observe_session(session, t)
+    elif t is not None:
+        _claim_session_transport(session, t)
     while True:
         busy_transport = None
         with session["history_lock"]:
@@ -11123,6 +11212,18 @@ def _(rid, params: dict) -> dict:
 
     # Persist the DB row lazily, now that the user has actually sent a message.
     _ensure_session_db_row(session)
+    if mirrored_submit:
+        # Tell every desktop renderer which durable session the phone just
+        # acted on. The renderer resumes/focuses it immediately; the live
+        # session's inflight projection already contains the accepted user
+        # message, so no optimistic cross-surface guessing is required.
+        _broadcast_global_event(
+            "session.remote_focus",
+            {
+                "runtime_session_id": sid,
+                "stored_session_id": str(session.get("session_key") or sid),
+            },
+        )
     # A branch becomes real here: copy its parent's transcript into the row so it
     # resumes with full context (the agent won't persist the seed itself).
     _persist_branch_seed(session)
