@@ -82,14 +82,22 @@ describe('maybeNotifyUpdateAvailable', () => {
     expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({ icon: 'gift' })
   })
 
-  it('stays quiet for new commits once the toast was closed', () => {
+  it('stays quiet for the same release once the toast was closed', () => {
     maybeNotifyUpdateAvailable(status())
     lastToast().onDismiss() // user closes it → cooldown starts
     notifySpy.mockClear()
 
-    // A different commit lands while still within the cooldown window.
-    maybeNotifyUpdateAvailable(status({ targetSha: 'sha-b', behind: 9 }))
+    maybeNotifyUpdateAvailable(status({ behind: 9 }))
     expect(notifySpy).not.toHaveBeenCalled()
+  })
+
+  it('shows a newly reviewed release even during the prior release cooldown', () => {
+    maybeNotifyUpdateAvailable(status())
+    lastToast().onDismiss()
+    notifySpy.mockClear()
+
+    maybeNotifyUpdateAvailable(status({ targetSha: 'sha-b', behind: 9 }))
+    expect(notifySpy).toHaveBeenCalledTimes(1)
   })
 
   it('re-shows once the cooldown elapses', () => {
@@ -101,7 +109,7 @@ describe('maybeNotifyUpdateAvailable', () => {
     notifySpy.mockClear()
 
     vi.setSystemTime(25 * 60 * 60 * 1000) // > 24h cooldown
-    maybeNotifyUpdateAvailable(status({ targetSha: 'sha-b' }))
+    maybeNotifyUpdateAvailable(status())
     expect(notifySpy).toHaveBeenCalledTimes(1)
   })
 

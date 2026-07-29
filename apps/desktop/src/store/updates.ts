@@ -70,21 +70,23 @@ export const resetUpdateApplyState = () => {
 }
 
 const UPDATE_TOAST_ID = 'desktop-update-available'
-// Time-based snooze instead of per-sha dismissal: this repo lands ~100 commits
-// a day, so a "don't show this exact sha again" guard re-popped the toast on
-// every new commit. We instead suppress the toast for a cooldown window that
-// (re)starts whenever the user closes it.
+// Snooze one reviewed release, not every update for the next 24 hours. A
+// version released after the user handled an earlier banner must still be put
+// in front of them.
 const UPDATE_TOAST_SNOOZE_KEY = 'hermes:update-toast-snooze-until'
+const UPDATE_TOAST_SNOOZE_TARGET_KEY = 'hermes:update-toast-snooze-target'
 const UPDATE_TOAST_COOLDOWN_MS = 24 * 60 * 60 * 1000
 
-function snoozeUpdateToast(): void {
+function snoozeUpdateToast(target: string): void {
   persistString(UPDATE_TOAST_SNOOZE_KEY, String(Date.now() + UPDATE_TOAST_COOLDOWN_MS))
+  persistString(UPDATE_TOAST_SNOOZE_TARGET_KEY, target)
 }
 
-function isUpdateToastSnoozed(): boolean {
+function isUpdateToastSnoozed(target: string): boolean {
   const until = Number(storedString(UPDATE_TOAST_SNOOZE_KEY) || 0)
+  const snoozedTarget = storedString(UPDATE_TOAST_SNOOZE_TARGET_KEY)
 
-  return Number.isFinite(until) && Date.now() < until
+  return snoozedTarget === target && Number.isFinite(until) && Date.now() < until
 }
 
 // Must match tui_gateway's DESKTOP_BACKEND_CONTRACT that this build was written
@@ -207,7 +209,9 @@ export function maybeNotifyUpdateAvailable(status: DesktopUpdateStatus | null) {
     return
   }
 
-  if (isUpdateToastSnoozed()) {
+  const updateTarget = status.targetSha
+
+  if (isUpdateToastSnoozed(updateTarget)) {
     return
   }
 
@@ -221,7 +225,7 @@ export function maybeNotifyUpdateAvailable(status: DesktopUpdateStatus | null) {
     action: {
       label: translateNow('notifications.seeWhatsNew'),
       onClick: () => {
-        snoozeUpdateToast()
+        snoozeUpdateToast(updateTarget)
         openUpdatesWindow()
       }
     },
@@ -230,7 +234,7 @@ export function maybeNotifyUpdateAvailable(status: DesktopUpdateStatus | null) {
     id: UPDATE_TOAST_ID,
     kind: 'info',
     message: translateNow('notifications.updateReadyMessage', behind),
-    onDismiss: () => snoozeUpdateToast(),
+    onDismiss: () => snoozeUpdateToast(updateTarget),
     title: translateNow('notifications.updateReadyTitle')
   })
 }

@@ -5,7 +5,15 @@ import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { CheckCircle2, ExternalLink } from '@/lib/icons'
-import { $desktopVersion, refreshDesktopVersion } from '@/store/updates'
+import {
+  $desktopVersion,
+  $updateApply,
+  $updateChecking,
+  $updateStatus,
+  applyUpdates,
+  checkUpdates,
+  refreshDesktopVersion
+} from '@/store/updates'
 
 import { SettingsContent } from './primitives'
 import { UninstallSection } from './uninstall-section'
@@ -16,6 +24,10 @@ export function AboutSettings() {
   const { t } = useI18n()
   const a = t.settings.about
   const version = useStore($desktopVersion)
+  const updateStatus = useStore($updateStatus)
+  const updateChecking = useStore($updateChecking)
+  const updateApply = useStore($updateApply)
+  const updateAvailable = Boolean(updateStatus?.updateAvailable || (updateStatus?.behind ?? 0) > 0)
 
   // The version atom is loaded once at app boot, which makes About show a
   // stale number after a self-update (the running binary is current, the
@@ -49,7 +61,26 @@ export function AboutSettings() {
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <Button
+              disabled={updateChecking || updateApply.applying}
+              onClick={() => void checkUpdates()}
+              size="sm"
+              variant="outline"
+            >
+              {updateChecking ? a.checking : a.checkNow}
+            </Button>
+
+            {updateAvailable && (
+              <Button
+                disabled={updateApply.applying}
+                onClick={() => void applyUpdates()}
+                size="sm"
+              >
+                {updateApply.applying ? a.installing : a.updateNow}
+              </Button>
+            )}
+
             <Button asChild size="sm" variant="text">
               <a
                 href={RELEASE_NOTES_URL}
