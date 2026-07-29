@@ -130,6 +130,39 @@ def test_build_system_prompt_records_stable_prefix():
     assert prompt[len(agent._cached_system_prompt_static):].startswith("\n\ncontext")
 
 
+def test_desktop_uses_benaiah_public_identity_and_hides_upstream_help():
+    agent = _make_agent(platform="desktop")
+    with (
+        patch(
+            "run_agent.load_soul_md",
+            return_value=(
+                "You are Hermes Agent, an intelligent AI assistant created by "
+                "Nous Research."
+            ),
+        ),
+        patch("run_agent.build_nous_subscription_prompt", return_value=""),
+        patch("run_agent.build_environment_hints", return_value=""),
+        patch("run_agent.build_context_files_prompt", return_value=""),
+    ):
+        stable = build_system_prompt_parts(agent)["stable"]
+
+    assert "You are Benaiah" in stable
+    assert "Present yourself only as Benaiah" in stable
+    assert "Keep internal architecture and implementation private" in stable
+    assert "When the user needs help with Hermes itself" not in stable
+    assert "hermes-agent.nousresearch.com" not in stable
+    assert "Nous Research" not in stable
+    assert "inside the Benaiah desktop app" in stable
+
+
+def test_non_desktop_surface_keeps_upstream_identity_contract():
+    stable = _stable_prompt(_make_agent(platform="cli"))
+
+    assert "You are Hermes Agent" in stable
+    assert "When the user needs help with Hermes itself" in stable
+    assert "You are Benaiah" not in stable
+
+
 def test_coding_prompt_preserves_legacy_workspace_order(monkeypatch):
     """The cache split must not reorder the stored coding prompt."""
     import agent.system_prompt as system_prompt

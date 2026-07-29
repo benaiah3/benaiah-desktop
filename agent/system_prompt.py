@@ -31,6 +31,8 @@ import os
 from typing import Any, Dict, List, Optional
 
 from agent.prompt_builder import (
+    BENAIAH_PUBLIC_HELP_GUIDANCE,
+    BENAIAH_PUBLIC_IDENTITY,
     DEFAULT_AGENT_IDENTITY,
     GOOGLE_MODEL_OPERATIONAL_GUIDANCE,
     HERMES_AGENT_HELP_GUIDANCE,
@@ -53,6 +55,21 @@ from hermes_constants import get_hermes_home
 from utils import is_truthy_value
 
 logger = logging.getLogger(__name__)
+
+_BENAIAH_PRIVATE_PERSONA_MARKERS = (
+    "hermes",
+    "nous research",
+    "nousresearch",
+)
+
+
+def _benaiah_public_persona(content: str) -> str:
+    """Keep custom persona guidance while dropping upstream identity lines."""
+    return "\n".join(
+        line
+        for line in str(content or "").splitlines()
+        if not any(marker in line.lower() for marker in _BENAIAH_PRIVATE_PERSONA_MARKERS)
+    ).strip()
 
 
 def _ra():
@@ -185,6 +202,8 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
 
     # ── Stable tier ────────────────────────────────────────────────
     stable_parts: List[str] = []
+    platform_key = (agent.platform or "").lower().strip()
+    benaiah_public_surface = platform_key == "desktop"
 
     # Try SOUL.md as primary identity unless the caller explicitly skipped it.
     # Some execution modes (cron) still want HERMES_HOME persona while keeping
@@ -192,16 +211,30 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     _soul_loaded = False
     if agent.load_soul_identity or not agent.skip_context_files:
         _soul_content = _r.load_soul_md(_ctx_len)
+        if benaiah_public_surface:
+            _soul_content = _benaiah_public_persona(_soul_content)
         if _soul_content:
             stable_parts.append(_soul_content)
             _soul_loaded = True
 
-    if not _soul_loaded:
+    if benaiah_public_surface:
+        # The desktop and its Remote mirror are white-labelled Benaiah
+        # surfaces. Keep any user-authored SOUL.md personality above, then make
+        # the public identity/privacy boundary the final authority for how the
+        # agent presents itself. This is stable for the life of the session and
+        # therefore preserves prompt caching.
+        stable_parts.append(BENAIAH_PUBLIC_IDENTITY)
+    elif not _soul_loaded:
         # Fallback to hardcoded identity
         stable_parts.append(DEFAULT_AGENT_IDENTITY)
 
-    # Pointer to the hermes-agent skill + docs for user questions about Hermes itself.
-    stable_parts.append(HERMES_AGENT_HELP_GUIDANCE)
+    # Public Benaiah surfaces must explain the product without volunteering
+    # the compatible upstream runtime or its internal configuration surface.
+    stable_parts.append(
+        BENAIAH_PUBLIC_HELP_GUIDANCE
+        if benaiah_public_surface
+        else HERMES_AGENT_HELP_GUIDANCE
+    )
 
     # Universal task-completion / no-fabrication guidance.  Applied to ALL
     # models regardless of tool_use_enforcement gating — the failure modes
@@ -408,9 +441,10 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         active_profile = _resolve_active_profile_name()
     except Exception:
         active_profile = "default"
+    profile_label = "Benaiah" if benaiah_public_surface else "Hermes"
     if active_profile == "default":
         post_workspace_parts.append(
-            "Active Hermes profile: default. Other profiles (if any) live "
+            f"Active {profile_label} profile: default. Other profiles (if any) live "
             "under " + str(get_hermes_home()) + "/profiles/<name>/. Each profile has its own "
             "skills/, plugins/, cron/, and memories/ that affect a different "
             "session than this one. Do not modify another profile's "
@@ -419,7 +453,7 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         )
     else:
         post_workspace_parts.append(
-            f"Active Hermes profile: {active_profile}. This session reads "
+            f"Active {profile_label} profile: {active_profile}. This session reads "
             f"and writes {get_hermes_home()}/profiles/{active_profile}/. The default "
             f"profile's data lives at {get_hermes_home()}/skills/, {get_hermes_home()}/plugins/, "
             f"{get_hermes_home()}/cron/, {get_hermes_home()}/memories/ — those belong to a "
@@ -430,7 +464,6 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
             f"after explicit direction."
         )
 
-    platform_key = (agent.platform or "").lower().strip()
     # Resolve the built-in/plugin default hint for this platform, then apply
     # any per-platform override from config (platform_hints.<platform>).
     _default_hint = ""
