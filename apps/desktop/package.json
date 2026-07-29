@@ -2,7 +2,7 @@
   "name": "benaiah-desktop",
   "productName": "Benaiah",
   "private": true,
-  "version": "0.20.0",
+  "version": "0.20.1",
   "description": "Native desktop shell for Benaiah.",
   "author": "Benaiah AI",
   "type": "module",
@@ -101,6 +101,7 @@
     "d3-force": "^3.0.0",
     "dnd-core": "^14.0.1",
     "dompurify": "^3.4.11",
+    "electron-updater": "^6.8.9",
     "fflate": "^0.8.3",
     "hast-util-from-html-isomorphic": "^2.0.0",
     "hast-util-to-text": "^4.0.2",
@@ -208,6 +209,14 @@
     ],
     "asar": true,
     "afterSign": "scripts/notarize.mjs",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "benaiah3",
+        "repo": "benaiah-desktop",
+        "releaseType": "release"
+      }
+    ],
     "asarUnpack": [
       "**/*.node",
       "**/prebuilds/**",
@@ -237,7 +246,6 @@
       "backgroundColor": "#f5f5f7",
       "iconSize": 96,
       "sign": true,
-      "writeUpdateInfo": false,
       "window": {
         "width": 560,
         "height": 360

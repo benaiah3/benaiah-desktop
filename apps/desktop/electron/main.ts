@@ -29,6 +29,7 @@ import {
   shell,
   systemPreferences
 } from 'electron'
+import { autoUpdater as signedReleaseUpdater } from 'electron-updater'
 import nodePty from 'node-pty'
 
 import { classifyActiveRuntime } from './active-runtime-state'
@@ -150,6 +151,7 @@ import { decideProfileDeleteAction, profileNameFromDeleteRequest, resolveRoutePr
 import { fetchPrimaryProfileSessions } from './profile-session-routing'
 import { createQuickEntryShortcut, quickEntryWindowBounds, sanitizeQuickEntrySettings } from './quick-entry'
 import { type ActiveWork, mergeActiveWork, normalizeActiveWork, quitPromptFor } from './quit-guard'
+import { createReleaseUpdaterController } from './release-updater'
 import * as remoteLifecycle from './remote-lifecycle'
 import {
   RemoteLivenessTracker,
@@ -2364,6 +2366,25 @@ function emitUpdateProgress(payload) {
   }
 }
 
+let releaseUpdaterController = null
+
+function getReleaseUpdaterController() {
+  releaseUpdaterController ??= createReleaseUpdaterController({
+    currentVersion: () => app.getVersion(),
+    emitProgress: progress => {
+      emitUpdateProgress({
+        stage: 'update',
+        message: 'Downloading the signed Benaiah update…',
+        percent: progress.percent
+      })
+    },
+    log: rememberLog,
+    updater: signedReleaseUpdater
+  })
+
+  return releaseUpdaterController
+}
+
 // Self-heal the tracked update branch: if origin no longer publishes it (e.g.
 // bb/gui was merged into main and deleted), fall back to main and persist so
 // every later check/apply follows main — no manual flip, even for already-
@@ -2397,12 +2418,21 @@ async function checkUpdates() {
   // Benaiah ships reviewed, signed releases. A packaged client must never
   // advertise raw commits from the source checkout as end-user updates: those
   // commits may not yet have been white-labelled, QA'd, signed or notarised.
-  // Development builds retain the upstream source-update workflow.
+  // Packaged builds therefore use only the Benaiah-owned binary feed.
+  // Development builds retain the source-update workflow below.
   if (IS_PACKAGED) {
+    const status = await getReleaseUpdaterController().check()
+
     return {
-      supported: false,
-      reason: 'managed-release-channel',
-      message: 'Benaiah updates are delivered as reviewed signed releases.'
+      supported: true,
+      updateAvailable: status.updateAvailable,
+      behind: status.updateAvailable ? 1 : 0,
+      currentSha: status.currentVersion,
+      targetSha: status.latestVersion,
+      message: status.updateAvailable
+        ? `Benaiah ${status.latestVersion} is ready.`
+        : `Benaiah ${status.currentVersion} is up to date.`,
+      fetchedAt: Date.now()
     }
   }
 
@@ -2789,7 +2819,41 @@ async function releaseBackendLock(updateRoot, tag) {
 // only this apply action changed.
 async function applyUpdates(opts = {}) {
   if (IS_PACKAGED) {
-    throw new Error('Benaiah updates are delivered as reviewed signed releases.')
+    if (updateInFlight) {
+      throw new Error('An update is already in progress.')
+    }
+
+    updateInFlight = true
+
+    try {
+      emitUpdateProgress({
+        stage: 'prepare',
+        message: 'Preparing the reviewed Benaiah release…',
+        percent: 5
+      })
+
+      const status = await getReleaseUpdaterController().download()
+
+      if (!status.updateAvailable) {
+        return {
+          ok: false,
+          error: 'no-update',
+          message: `Benaiah ${status.currentVersion} is already up to date.`
+        }
+      }
+
+      emitUpdateProgress({
+        stage: 'restart',
+        message: `Benaiah ${status.latestVersion} is ready. Restarting to finish the update…`,
+        percent: 100
+      })
+      isQuittingForHandoff = true
+      setTimeout(() => getReleaseUpdaterController().install(), 700)
+
+      return { ok: true, handedOff: true, version: status.latestVersion }
+    } finally {
+      updateInFlight = false
+    }
   }
 
   if (updateInFlight) {
