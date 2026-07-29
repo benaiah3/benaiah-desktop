@@ -1520,6 +1520,26 @@ def test_named_custom_provider_without_api_mode_defaults(monkeypatch):
     assert resolved["api_mode"] == "chat_completions"
 
 
+def test_benaiah_managed_gateway_recovers_responses_mode_without_persisted_field(monkeypatch):
+    """Older desktop installs must not fall back to the nonexistent chat route."""
+    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "custom")
+    monkeypatch.setattr(
+        rp,
+        "_get_model_config",
+        lambda: {
+            "default": "benaiah-auto",
+            "provider": "custom",
+            "base_url": "https://benaiah-cli-gateway.vercel.app/api/cli/v1",
+            "api_key": "bna_guest_test",
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="custom", target_model="benaiah-auto")
+
+    assert resolved["api_mode"] == "codex_responses"
+    assert resolved["base_url"] == "https://benaiah-cli-gateway.vercel.app/api/cli/v1"
+
+
 def test_anthropic_messages_in_valid_api_modes():
     """anthropic_messages should be accepted by _parse_api_mode."""
     assert rp._parse_api_mode("anthropic_messages") == "anthropic_messages"

@@ -125,13 +125,24 @@ def _detect_api_mode_for_url(base_url: str) -> Optional[str]:
         return "codex_responses"
     if hostname == "api.openai.com":
         return "codex_responses"
+    # Benaiah's managed desktop gateway deliberately exposes the OpenAI
+    # Responses surface. Older packaged builds persisted the custom endpoint
+    # and key but dropped model.api_mode, causing the next launch to fall back
+    # to /chat/completions and fail before reaching the gateway. Exact host +
+    # path matching keeps this recovery scoped to the managed endpoint and
+    # rejects lookalike hosts.
+    path = urlparse(normalized).path.rstrip("/")
+    if (
+        hostname == "benaiah-cli-gateway.vercel.app"
+        and path == "/api/cli/v1"
+    ):
+        return "codex_responses"
     # Direct native Anthropic host: realign with providers.determine_api_mode,
     # which already maps this host to anthropic_messages. The exact-hostname
     # match rejects lookalike subdomains (api.anthropic.com.attacker.test) and
     # path-segment spoofing (proxy.test/api.anthropic.com/v1). (#32243)
     if hostname == "api.anthropic.com":
         return "anthropic_messages"
-    path = urlparse(normalized).path.rstrip("/")
     if path.endswith("/anthropic") or path.endswith("/anthropic/v1"):
         return "anthropic_messages"
     if hostname == "api.kimi.com" and "/coding" in normalized:

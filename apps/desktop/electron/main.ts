@@ -2394,6 +2394,18 @@ async function resolveHealedBranch(updateRoot, branch) {
 }
 
 async function checkUpdates() {
+  // Benaiah ships reviewed, signed releases. A packaged client must never
+  // advertise raw commits from the source checkout as end-user updates: those
+  // commits may not yet have been white-labelled, QA'd, signed or notarised.
+  // Development builds retain the upstream source-update workflow.
+  if (IS_PACKAGED) {
+    return {
+      supported: false,
+      reason: 'managed-release-channel',
+      message: 'Benaiah updates are delivered as reviewed signed releases.'
+    }
+  }
+
   const updateRoot = resolveUpdateRoot()
   let { branch } = readDesktopUpdateConfig()
   const gitDir = path.join(updateRoot, '.git')
@@ -2776,6 +2788,10 @@ async function releaseBackendLock(updateRoot, tag) {
 // Detection (checkUpdates / commit changelog / "N behind") stays in the UI;
 // only this apply action changed.
 async function applyUpdates(opts = {}) {
+  if (IS_PACKAGED) {
+    throw new Error('Benaiah updates are delivered as reviewed signed releases.')
+  }
+
   if (updateInFlight) {
     throw new Error('An update is already in progress.')
   }
@@ -6645,7 +6661,7 @@ async function beginBenaiahAccountLink() {
 
   const linkUrl = String(link?.url || '')
 
-  if (!/^https:\/\/benaiah\.ai\/profile\?/.test(linkUrl)) {
+  if (!/^https:\/\/benaiah\.ai\/settings\?[^#]*code=[^#]+#profile$/.test(linkUrl)) {
     throw new Error('Benaiah did not return a valid account link.')
   }
 
