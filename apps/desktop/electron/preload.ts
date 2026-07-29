@@ -127,6 +127,7 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   openExternal: url => ipcRenderer.invoke('hermes:openExternal', url),
   benaiahAccount: {
     start: () => ipcRenderer.invoke('hermes:benaiah-account:start'),
+    startQr: () => ipcRenderer.invoke('hermes:benaiah-account:qr'),
     status: profile => ipcRenderer.invoke('hermes:benaiah-account:status', profile),
     reopen: () => ipcRenderer.invoke('hermes:benaiah-account:reopen')
   },

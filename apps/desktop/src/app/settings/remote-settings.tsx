@@ -7,6 +7,16 @@ import { CheckCircle2, QrCode, RefreshCw } from '@/lib/icons'
 import { SettingsContent } from './primitives'
 
 type Pairing = Awaited<ReturnType<typeof window.hermesDesktop.benaiahRemote.createPairing>>
+type AccountLink = Awaited<ReturnType<typeof window.hermesDesktop.benaiahAccount.startQr>>
+
+async function qrDataUrl(url: string) {
+  return QRCode.toDataURL(url, {
+    color: { dark: '#000000', light: '#ffffff' },
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    width: 440
+  })
+}
 
 function remainingLabel(expiresAt?: string) {
   const remaining = Math.max(0, new Date(expiresAt || '').getTime() - Date.now())
@@ -18,8 +28,11 @@ function remainingLabel(expiresAt?: string) {
 export function RemoteSettings() {
   const [pairing, setPairing] = useState<Pairing | null>(null)
   const [qrCode, setQrCode] = useState('')
+  const [accountLink, setAccountLink] = useState<AccountLink | null>(null)
+  const [accountQrCode, setAccountQrCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [connectingAccount, setConnectingAccount] = useState(false)
   const [, tick] = useState(0)
 
   const refresh = useCallback(async () => {
@@ -29,12 +42,7 @@ export function RemoteSettings() {
       const next = await window.hermesDesktop.benaiahRemote.createPairing()
       setPairing(next)
       if (next.url) {
-        setQrCode(await QRCode.toDataURL(next.url, {
-          color: { dark: '#000000', light: '#ffffff' },
-          errorCorrectionLevel: 'M',
-          margin: 2,
-          width: 440
-        }))
+        setQrCode(await qrDataUrl(next.url))
       } else {
         setQrCode('')
       }
@@ -47,6 +55,25 @@ export function RemoteSettings() {
     }
   }, [])
 
+  const connectAccount = useCallback(async () => {
+    setConnectingAccount(true)
+    setError('')
+    try {
+      const next = await window.hermesDesktop.benaiahAccount.startQr()
+      if (!next.linkUrl) {
+        throw new Error('Benaiah did not return a phone connection code.')
+      }
+      setAccountLink(next)
+      setAccountQrCode(await qrDataUrl(next.linkUrl))
+    } catch (cause) {
+      setAccountLink(null)
+      setAccountQrCode('')
+      setError(cause instanceof Error ? cause.message : 'A phone connection code could not be created.')
+    } finally {
+      setConnectingAccount(false)
+    }
+  }, [])
+
   useEffect(() => {
     void refresh()
   }, [refresh])
@@ -56,7 +83,35 @@ export function RemoteSettings() {
     return () => window.clearInterval(timer)
   }, [])
 
+  useEffect(() => {
+    if (!accountLink) return
+
+    let checking = false
+    const check = async () => {
+      if (checking) return
+      checking = true
+      try {
+        const status = await window.hermesDesktop.benaiahAccount.status('default')
+        if (status.linked) {
+          setAccountLink(null)
+          setAccountQrCode('')
+          await refresh()
+        }
+      } catch {
+        // Keep the QR visible. A transient poll failure should not interrupt pairing.
+      } finally {
+        checking = false
+      }
+    }
+    void check()
+    const timer = window.setInterval(() => void check(), 1500)
+    return () => window.clearInterval(timer)
+  }, [accountLink, refresh])
+
   const expired = Boolean(pairing?.expiresAt && new Date(pairing.expiresAt).getTime() <= Date.now())
+  const accountExpired = Boolean(
+    accountLink?.expiresAt && new Date(accountLink.expiresAt).getTime() <= Date.now()
+  )
 
   return (
     <SettingsContent>
@@ -87,6 +142,34 @@ export function RemoteSettings() {
                 </Button>
               </div>
             </div>
+          ) : accountLink ? (
+            <div className="grid justify-items-center">
+              <div className="rounded-[1.75rem] bg-white p-3 shadow-sm">
+                {accountQrCode && !accountExpired ? (
+                  <img
+                    alt="Scan to connect this Mac to your Benaiah account"
+                    className="size-72 max-h-[44vh] max-w-full rounded-2xl"
+                    height="288"
+                    src={accountQrCode}
+                    width="288"
+                  />
+                ) : (
+                  <div className="grid size-72 max-h-[44vh] max-w-full place-items-center rounded-2xl bg-neutral-100 px-8 text-center text-sm text-neutral-600">
+                    This code has expired.
+                  </div>
+                )}
+              </div>
+              <p className="mt-4 text-sm font-medium">Scan with the phone you use for Benaiah</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {accountExpired
+                  ? 'Refresh the code to continue.'
+                  : `Connecting securely · code expires in ${remainingLabel(accountLink.expiresAt)}`}
+              </p>
+              <Button className="mt-4" onClick={() => void connectAccount()} size="sm" variant="outline">
+                <RefreshCw className="size-4" />
+                Refresh code
+              </Button>
+            </div>
           ) : !pairing?.linked ? (
             <div className="grid min-h-72 place-items-center text-center">
               <div>
@@ -96,9 +179,11 @@ export function RemoteSettings() {
                 </p>
                 <Button
                   className="mt-5"
-                  onClick={() => void window.hermesDesktop.benaiahAccount.start()}
+                  disabled={connectingAccount}
+                  onClick={() => void connectAccount()}
                 >
-                  Connect account
+                  <QrCode className="size-4" />
+                  {connectingAccount ? 'Creating code…' : 'Connect account'}
                 </Button>
               </div>
             </div>
@@ -138,8 +223,8 @@ export function RemoteSettings() {
         <div className="mt-5 rounded-2xl border border-border/60 px-4 py-3 text-sm">
           <p className="font-medium">Open your phone camera and scan.</p>
           <p className="mt-1 leading-5 text-muted-foreground">
-            If you are already signed into Benaiah, the remote opens automatically. The code works once,
-            expires after five minutes and cannot pair another account.
+            If you are already signed into Benaiah, your Mac connects and the remote opens automatically.
+            The code works once, expires after five minutes and cannot pair another account.
           </p>
         </div>
       </div>

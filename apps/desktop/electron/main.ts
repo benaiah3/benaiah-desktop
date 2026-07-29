@@ -33,6 +33,7 @@ import { autoUpdater as signedReleaseUpdater } from 'electron-updater'
 import nodePty from 'node-pty'
 
 import { classifyActiveRuntime } from './active-runtime-state'
+import { prepareBenaiahAccountLink } from './benaiah-account-link'
 import { stopBackendChild as stopBackendChildImpl } from './backend-child'
 import { dashboardFallbackArgs, sourceDeclaresServe } from './backend-command'
 import { createBackendConnectionState } from './backend-connection-state'
@@ -6854,25 +6855,26 @@ async function createBenaiahRemotePairing() {
   }
 }
 
-function readBenaiahAccountLink(): { linkUrl: string; token: string } | null {
+function readBenaiahAccountLink(): { expiresAt: string; linkUrl: string; token: string } | null {
   try {
     const payload = JSON.parse(fs.readFileSync(benaiahAccountLinkPath(), 'utf8'))
     const token = decryptDesktopSecret(payload?.token)
     const linkUrl = String(payload?.linkUrl || '')
+    const expiresAt = String(payload?.expiresAt || '')
 
-    return token && /^https:\/\/benaiah\.ai\//.test(linkUrl) ? { token, linkUrl } : null
+    return token && /^https:\/\/benaiah\.ai\//.test(linkUrl) ? { token, linkUrl, expiresAt } : null
   } catch {
     return null
   }
 }
 
-function writeBenaiahAccountLink(token: string, linkUrl: string) {
+function writeBenaiahAccountLink(token: string, linkUrl: string, expiresAt = '') {
   const target = benaiahAccountLinkPath()
 
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.writeFileSync(
     target,
-    JSON.stringify({ linkUrl, token: encryptDesktopSecret(token) }),
+    JSON.stringify({ expiresAt, linkUrl, token: encryptDesktopSecret(token) }),
     { mode: 0o600 }
   )
 }
@@ -6885,7 +6887,7 @@ function clearBenaiahAccountLink() {
   }
 }
 
-async function beginBenaiahAccountLink() {
+async function beginBenaiahAccountLink(options: { openBrowser?: boolean; returnToRemote?: boolean } = {}) {
   const issued: any = await fetchJson(`${BENAIAH_ACCOUNT_GATEWAY}/responses`, null, {
     method: 'POST',
     body: {},
@@ -6905,19 +6907,31 @@ async function beginBenaiahAccountLink() {
     timeoutMs: 15_000
   })
 
-  const linkUrl = String(link?.url || '')
+  const linkUrl = prepareBenaiahAccountLink(String(link?.url || ''))
+  const expiresAt = String(link?.expiresAt || '')
 
-  if (!/^https:\/\/benaiah\.ai\/settings\?[^#]*code=[^#]+#profile$/.test(linkUrl)) {
-    throw new Error('Benaiah did not return a valid account link.')
+  let destinationUrl = linkUrl
+
+  if (options.returnToRemote) {
+    const identity = readOrCreateBenaiahRemoteIdentity()
+    destinationUrl = prepareBenaiahAccountLink(linkUrl, {
+      deviceId: identity.deviceId,
+      returnToRemote: true
+    })
   }
 
-  writeBenaiahAccountLink(token, linkUrl)
+  writeBenaiahAccountLink(token, destinationUrl, expiresAt)
 
-  if (!openExternalUrl(linkUrl)) {
+  if (options.openBrowser !== false && !openExternalUrl(destinationUrl)) {
     throw new Error('The Benaiah sign-in page could not be opened.')
   }
 
-  return { linked: false, opened: true }
+  return {
+    expiresAt,
+    linked: false,
+    linkUrl: destinationUrl,
+    opened: options.openBrowser !== false
+  }
 }
 
 async function benaiahAccountLinkStatus(profile?: string) {
@@ -10810,6 +10824,9 @@ ipcMain.handle('hermes:openExternal', (_event, url) => {
 })
 
 ipcMain.handle('hermes:benaiah-account:start', () => beginBenaiahAccountLink())
+ipcMain.handle('hermes:benaiah-account:qr', () =>
+  beginBenaiahAccountLink({ openBrowser: false, returnToRemote: true })
+)
 ipcMain.handle('hermes:benaiah-account:status', (_event, profile) => benaiahAccountLinkStatus(profile))
 ipcMain.handle('hermes:benaiah-account:reopen', () => reopenBenaiahAccountLink())
 ipcMain.handle('hermes:benaiah-remote:pairing', () => createBenaiahRemotePairing())

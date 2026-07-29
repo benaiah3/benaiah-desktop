@@ -137,7 +137,18 @@ declare global {
       setPreviewShortcutActive?: (active: boolean) => void
       openExternal: (url: string) => Promise<void>
       benaiahAccount: {
-        start: () => Promise<{ linked: boolean; opened: boolean }>
+        start: () => Promise<{
+          expiresAt?: string
+          linked: boolean
+          linkUrl?: string
+          opened: boolean
+        }>
+        startQr: () => Promise<{
+          expiresAt?: string
+          linked: boolean
+          linkUrl?: string
+          opened: boolean
+        }>
         status: (profile?: string) => Promise<{
           email?: string
           linked: boolean
