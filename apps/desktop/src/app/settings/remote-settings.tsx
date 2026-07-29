@@ -9,6 +9,8 @@ import { SettingsContent } from './primitives'
 type Pairing = Awaited<ReturnType<typeof window.hermesDesktop.benaiahRemote.createPairing>>
 type AccountLink = Awaited<ReturnType<typeof window.hermesDesktop.benaiahAccount.startQr>>
 
+const SECURE_CODE_ERROR = 'Benaiah could not create a secure connection code. Check your connection and try again.'
+
 async function qrDataUrl(url: string) {
   return QRCode.toDataURL(url, {
     color: { dark: '#000000', light: '#ffffff' },
@@ -46,10 +48,10 @@ export function RemoteSettings() {
       } else {
         setQrCode('')
       }
-    } catch (cause) {
+    } catch {
       setPairing(null)
       setQrCode('')
-      setError(cause instanceof Error ? cause.message : 'A pairing code could not be created.')
+      setError(SECURE_CODE_ERROR)
     } finally {
       setLoading(false)
     }
@@ -65,10 +67,10 @@ export function RemoteSettings() {
       }
       setAccountLink(next)
       setAccountQrCode(await qrDataUrl(next.linkUrl))
-    } catch (cause) {
+    } catch {
       setAccountLink(null)
       setAccountQrCode('')
-      setError(cause instanceof Error ? cause.message : 'A phone connection code could not be created.')
+      setError(SECURE_CODE_ERROR)
     } finally {
       setConnectingAccount(false)
     }
@@ -122,7 +124,7 @@ export function RemoteSettings() {
           </div>
           <h2 className="mt-4 text-xl font-semibold tracking-tight">Remote</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            Scan once to carry this Benaiah harness onto your phone.
+            Scan once to take Benaiah with you.
           </p>
         </div>
 
@@ -134,7 +136,7 @@ export function RemoteSettings() {
           ) : error ? (
             <div className="grid min-h-72 place-items-center text-center">
               <div>
-                <h3 className="font-medium">A code could not be created</h3>
+                <h3 className="font-medium">Remote is temporarily unavailable</h3>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{error}</p>
                 <Button className="mt-5" onClick={() => void refresh()} variant="outline">
                   <RefreshCw className="size-4" />

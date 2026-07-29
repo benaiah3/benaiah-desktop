@@ -10829,7 +10829,14 @@ ipcMain.handle('hermes:benaiah-account:qr', () =>
 )
 ipcMain.handle('hermes:benaiah-account:status', (_event, profile) => benaiahAccountLinkStatus(profile))
 ipcMain.handle('hermes:benaiah-account:reopen', () => reopenBenaiahAccountLink())
-ipcMain.handle('hermes:benaiah-remote:pairing', () => createBenaiahRemotePairing())
+ipcMain.handle('hermes:benaiah-remote:pairing', async () => {
+  try {
+    return await createBenaiahRemotePairing()
+  } catch (error) {
+    rememberLog(`[remote] secure pairing failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error('Benaiah could not create a secure connection code. Please try again.')
+  }
+})
 
 // ── Find-in-page (Ctrl/Cmd+F) ─────────────────────────────────────────────
 // The desktop supports multiple BrowserWindows (one primary plus any

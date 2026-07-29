@@ -63,4 +63,24 @@ describe('RemoteSettings', () => {
     ).toBe('data:image/png;base64,phone-qr')
     expect(screen.getByText('Scan with the phone you use for Benaiah')).toBeTruthy()
   })
+
+  it('never exposes internal Remote errors in the interface', async () => {
+    createPairing.mockRejectedValueOnce(
+      new Error(
+        `Error invoking remote method 'hermes:benaiah-remote:pairing': Error: 401: {"error":"internal"}`
+      )
+    )
+
+    const { RemoteSettings } = await import('./remote-settings')
+    render(<RemoteSettings />)
+
+    expect(await screen.findByText('Remote is temporarily unavailable')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Benaiah could not create a secure connection code. Check your connection and try again.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/hermes:benaiah-remote/i)).toBeNull()
+    expect(screen.queryByText(/401/)).toBeNull()
+  })
 })
