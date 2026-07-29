@@ -70,7 +70,7 @@ if (process.platform === "darwin" && !childEnv.CSC_KEYCHAIN) {
     }
     childEnv.CSC_KEYCHAIN = keychain
     childEnv.APPLE_NOTARY_PROFILE ||= "benaiah-notary"
-    childEnv.APPLE_NOTARY_KEYCHAIN = keychain
+    childEnv.APPLE_NOTARY_KEYCHAIN ||= keychain
   }
 }
 
