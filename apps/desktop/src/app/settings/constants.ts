@@ -280,16 +280,13 @@ export const ENUM_OPTIONS: Record<string, string[]> = {
     'shimmer',
     'verse'
   ],
-  // Popular Edge neural voices (the full catalog is 400+ — free input).
+  // Benaiah's curated British Edge voices. Existing custom values are merged
+  // into the dropdown by enumOptionsFor so a prior deliberate choice is never
+  // discarded.
   'tts.edge.voice': [
     'en-GB-RyanNeural',
-    'en-GB-ThomasNeural',
     'en-GB-SoniaNeural',
-    'en-US-AriaNeural',
-    'en-US-JennyNeural',
-    'en-US-AndrewNeural',
-    'en-US-BrianNeural',
-    'en-US-GuyNeural'
+    'en-GB-ThomasNeural'
   ],
   'tts.gemini.model': ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'],
   // Gemini TTS prebuilt voice set.
@@ -366,7 +363,6 @@ export const ENUM_OPTIONS: Record<string, string[]> = {
 // names faster than this list updates. The ENUM_OPTIONS above become
 // suggestions rather than a gate for these keys.
 export const FREE_INPUT_KEYS = new Set([
-  'tts.edge.voice',
   'tts.openai.model',
   'tts.openai.voice',
   'tts.elevenlabs.voice_id',
@@ -384,6 +380,12 @@ export const FREE_INPUT_KEYS = new Set([
   'tts.deepinfra.model',
   'tts.deepinfra.voice'
 ])
+
+export const EDGE_VOICE_LABELS: Record<string, string> = {
+  'en-GB-RyanNeural': 'Ryan — British male (default)',
+  'en-GB-SoniaNeural': 'Sonia — British female',
+  'en-GB-ThomasNeural': 'Thomas — British male'
+}
 
 export const FIELD_LABELS: Record<string, string> = defineFieldCopy({
   model: 'Default Model',

@@ -28,6 +28,7 @@ import { useOnProfileSwitch } from '../hooks/use-on-profile-switch'
 import { PanelEmpty } from '../overlays/panel'
 
 import { ConfigField } from './config-field'
+import { EDGE_VOICE_LABELS } from './constants'
 import { enumOptionsFor, getNested, isExternalMemoryProvider, sectionFieldEntries, setNested } from './helpers'
 import { MemoryConnect } from './memory/connect'
 import { ProviderConfigPanel } from './memory/provider-config-panel'
@@ -338,7 +339,13 @@ export function ConfigSettings({
                     : enumOptionsFor(key, getNested(config, key), config)
                 }
                 onChange={value => updateConfig(setNested(config, key, value))}
-                optionLabels={key === 'tts.elevenlabs.voice_id' ? elevenLabsVoiceLabels : undefined}
+                optionLabels={
+                  key === 'tts.elevenlabs.voice_id'
+                    ? elevenLabsVoiceLabels
+                    : key === 'tts.edge.voice'
+                      ? EDGE_VOICE_LABELS
+                      : undefined
+                }
                 schema={field}
                 schemaKey={key}
                 value={getNested(config, key)}

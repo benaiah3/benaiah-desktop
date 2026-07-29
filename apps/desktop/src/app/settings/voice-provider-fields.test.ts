@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ENUM_OPTIONS, FREE_INPUT_KEYS, SECTIONS } from './constants'
+import { EDGE_VOICE_LABELS, ENUM_OPTIONS, FREE_INPUT_KEYS, SECTIONS } from './constants'
 import { voiceProviderKeys } from './voice-provider-fields'
 
 const voiceKeys = SECTIONS.find(s => s.id === 'voice')?.keys ?? []
@@ -47,12 +47,22 @@ describe('voice field option coverage', () => {
     }
   })
 
-  it('keeps voice/model name fields free-input so custom IDs are typeable', () => {
+  it('offers a labelled British male/female Edge voice dropdown', () => {
+    expect(ENUM_OPTIONS['tts.edge.voice']).toEqual([
+      'en-GB-RyanNeural',
+      'en-GB-SoniaNeural',
+      'en-GB-ThomasNeural'
+    ])
+    expect(EDGE_VOICE_LABELS['en-GB-RyanNeural']).toBe('Ryan — British male (default)')
+    expect(EDGE_VOICE_LABELS['en-GB-SoniaNeural']).toBe('Sonia — British female')
+    expect(FREE_INPUT_KEYS.has('tts.edge.voice')).toBe(false)
+  })
+
+  it('keeps open-world voice/model name fields free-input so custom IDs are typeable', () => {
     for (const key of [
       'tts.openai.voice',
       'tts.openai.model',
       'tts.elevenlabs.voice_id',
-      'tts.edge.voice',
       'tts.xai.voice_id',
       'tts.piper.voice'
     ]) {
