@@ -3,7 +3,10 @@ import { relayObjectName, verifyRelayTicket } from './tickets.mjs'
 const MAX_FRAME_BYTES = 1024 * 1024
 const MAX_CLIENTS = 4
 const RATE_WINDOW_MS = 1000
-const MAX_FRAMES_PER_WINDOW = 40
+const MAX_CLIENT_FRAMES_PER_WINDOW = 80
+const MAX_HOST_FRAMES_PER_WINDOW = 500
+const MAX_CLIENT_BYTES_PER_WINDOW = 2 * 1024 * 1024
+const MAX_HOST_BYTES_PER_WINDOW = 8 * 1024 * 1024
 
 function json(status, body) {
   return new Response(JSON.stringify(body), {
@@ -132,28 +135,31 @@ export class DeviceRelay {
     if (expired.length) await this.state.storage.delete(expired)
   }
 
-  withinRateLimit(connectionId) {
+  withinRateLimit(connectionId, role, byteLength) {
     const now = Date.now()
     const current = this.rate.get(connectionId)
     if (!current || now - current.startedAt >= RATE_WINDOW_MS) {
-      this.rate.set(connectionId, { startedAt: now, count: 1 })
-      return true
+      this.rate.set(connectionId, { startedAt: now, count: 1, bytes: byteLength })
+      return byteLength <= (role === 'host' ? MAX_HOST_BYTES_PER_WINDOW : MAX_CLIENT_BYTES_PER_WINDOW)
     }
     current.count += 1
-    return current.count <= MAX_FRAMES_PER_WINDOW
+    current.bytes += byteLength
+    const maxFrames = role === 'host' ? MAX_HOST_FRAMES_PER_WINDOW : MAX_CLIENT_FRAMES_PER_WINDOW
+    const maxBytes = role === 'host' ? MAX_HOST_BYTES_PER_WINDOW : MAX_CLIENT_BYTES_PER_WINDOW
+    return current.count <= maxFrames && current.bytes <= maxBytes
   }
 
   webSocketMessage(socket, message) {
     const attachment = socket.deserializeAttachment()
-    if (!attachment || !this.withinRateLimit(attachment.connectionId)) {
-      socket.close(4408, 'Remote session rate limit exceeded')
-      return
-    }
     const byteLength = typeof message === 'string'
       ? new TextEncoder().encode(message).byteLength
-      : message.byteLength
+      : Number(message?.byteLength || 0)
     if (byteLength > MAX_FRAME_BYTES || typeof message !== 'string') {
       socket.close(4409, 'Remote frame is too large or unsupported')
+      return
+    }
+    if (!attachment || !this.withinRateLimit(attachment.connectionId, attachment.role, byteLength)) {
+      socket.close(4408, 'Remote session rate limit exceeded')
       return
     }
 
