@@ -1,6 +1,12 @@
 import { type MutableRefObject, useCallback, useRef, useState } from 'react'
 
-import { getHermesConfig, getHermesConfigDefaults } from '@/hermes'
+import {
+  getApiRequestProfile,
+  getHermesConfig,
+  getHermesConfigDefaults,
+  saveHermesConfig
+} from '@/hermes'
+import { withBenaiahVoiceDefaults } from '@/lib/benaiah-voice-defaults'
 import { BUILTIN_PERSONALITIES, normalizePersonalityValue, personalityNamesFromConfig } from '@/lib/chat-runtime'
 import { normalize } from '@/lib/text'
 import {
@@ -57,12 +63,28 @@ export function useHermesConfig({ activeSessionIdRef }: HermesConfigOptions) {
 
       const profileRefreshEpoch = profileRefreshEpochRef.current
       const selectionGeneration = getComposerSelectionGeneration()
+      const requestProfile = getApiRequestProfile()
 
       try {
-        const [config, defaults] = await Promise.all([getHermesConfig(), getHermesConfigDefaults().catch(() => ({}))])
+        const [loadedConfig, defaults] = await Promise.all([
+          getHermesConfig(requestProfile ?? undefined),
+          getHermesConfigDefaults().catch(() => ({}))
+        ])
 
         if (profileRefreshEpochRef.current !== profileRefreshEpoch) {
           return
+        }
+
+        const voiceDefaults = withBenaiahVoiceDefaults(loadedConfig)
+        const config = voiceDefaults.config
+
+        if (voiceDefaults.changed) {
+          // Profile-scoped and best-effort: an older backend may reject the
+          // write, but chat must still load and will inherit its runtime
+          // default until it updates.
+          void saveHermesConfig(config as unknown as Record<string, unknown>, requestProfile ?? undefined).catch(
+            () => undefined
+          )
         }
 
         const personality = normalizePersonalityValue(

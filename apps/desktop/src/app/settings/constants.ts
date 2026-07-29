@@ -282,12 +282,14 @@ export const ENUM_OPTIONS: Record<string, string[]> = {
   ],
   // Popular Edge neural voices (the full catalog is 400+ — free input).
   'tts.edge.voice': [
+    'en-GB-RyanNeural',
+    'en-GB-ThomasNeural',
+    'en-GB-SoniaNeural',
     'en-US-AriaNeural',
     'en-US-JennyNeural',
     'en-US-AndrewNeural',
     'en-US-BrianNeural',
-    'en-US-GuyNeural',
-    'en-GB-SoniaNeural'
+    'en-US-GuyNeural'
   ],
   'tts.gemini.model': ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'],
   // Gemini TTS prebuilt voice set.

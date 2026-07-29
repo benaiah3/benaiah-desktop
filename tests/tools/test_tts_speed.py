@@ -34,10 +34,17 @@ class TestEdgeTtsSpeed:
         return mock_edge.Communicate
 
     def test_default_no_rate_kwarg(self, tmp_path):
-        """No speed config => no rate kwarg passed to Communicate."""
+        """Benaiah's free default is Ryan, with no unnecessary rate override."""
         comm_cls = self._run({}, tmp_path)
         kwargs = comm_cls.call_args[1]
+        assert kwargs["voice"] == "en-GB-RyanNeural"
         assert "rate" not in kwargs
+
+    def test_explicit_voice_overrides_benaiah_default(self, tmp_path):
+        """A deliberate user voice choice must remain authoritative."""
+        comm_cls = self._run({"edge": {"voice": "en-GB-ThomasNeural"}}, tmp_path)
+        kwargs = comm_cls.call_args[1]
+        assert kwargs["voice"] == "en-GB-ThomasNeural"
 
     def test_global_speed_applied(self, tmp_path):
         """Global tts.speed used as fallback."""

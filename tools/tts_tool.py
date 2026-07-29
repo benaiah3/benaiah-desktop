@@ -203,7 +203,7 @@ def _import_piper():
 # Defaults
 # ===========================================================================
 DEFAULT_PROVIDER = "edge"
-DEFAULT_EDGE_VOICE = "en-US-AriaNeural"
+DEFAULT_EDGE_VOICE = "en-GB-RyanNeural"
 DEFAULT_ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Adam
 DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
 DEFAULT_ELEVENLABS_STREAMING_MODEL_ID = "eleven_flash_v2_5"

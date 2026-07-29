@@ -328,6 +328,12 @@ export interface HermesConfig {
   stt?: {
     enabled?: boolean
   }
+  tts?: {
+    provider?: string
+    edge?: {
+      voice?: string
+    }
+  }
   voice?: {
     max_recording_seconds?: number
     auto_tts?: boolean

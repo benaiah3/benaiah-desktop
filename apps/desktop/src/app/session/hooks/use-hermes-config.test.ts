@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getHermesConfig } from '@/hermes'
+import { getApiRequestProfile, getHermesConfig, saveHermesConfig } from '@/hermes'
 import { persistString } from '@/lib/storage'
 import {
   $currentCwd,
@@ -20,8 +20,10 @@ import {
 import { useHermesConfig } from './use-hermes-config'
 
 vi.mock('@/hermes', () => ({
+  getApiRequestProfile: vi.fn().mockReturnValue(null),
   getHermesConfig: vi.fn(),
-  getHermesConfigDefaults: vi.fn().mockResolvedValue({})
+  getHermesConfigDefaults: vi.fn().mockResolvedValue({}),
+  saveHermesConfig: vi.fn().mockResolvedValue({ ok: true })
 }))
 
 const WORKSPACE_CWD_KEY = 'hermes.desktop.workspace-cwd'
@@ -48,6 +50,8 @@ describe('useHermesConfig refreshHermesConfig', () => {
     setCurrentReasoningEffort('')
     setDefaultReasoningEffort('')
     persistString(WORKSPACE_CWD_KEY, null)
+    vi.mocked(getApiRequestProfile).mockReturnValue(null)
+    vi.mocked(saveHermesConfig).mockClear()
   })
 
   // Regression: the composer keeps a manual model pick sticky, which skips the
@@ -69,6 +73,23 @@ describe('useHermesConfig refreshHermesConfig', () => {
     expect($defaultReasoningEffort.get()).toBe('high')
     // The manual pick itself is still respected.
     expect($currentReasoningEffort.get()).toBe('low')
+  })
+
+  it('persists Ryan for an unset legacy voice without crossing profile scope', async () => {
+    vi.mocked(getApiRequestProfile).mockReturnValue('work')
+    mockConfig({ voice: { auto_tts: true } })
+    const { result } = renderHook(() => useHermesConfig({ activeSessionIdRef: { current: null } }))
+
+    await act(async () => {
+      await result.current.refreshHermesConfig()
+    })
+
+    expect(saveHermesConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tts: { edge: { voice: 'en-GB-RyanNeural' } }
+      }),
+      'work'
+    )
   })
 
   it('does not let terminal.cwd replace an inactive selected workspace', async () => {
