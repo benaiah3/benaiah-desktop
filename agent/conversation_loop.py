@@ -470,7 +470,17 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
                 agent.session_id, exc,
             )
 
-    if stored_prompt and _stored_prompt_matches_runtime(agent, stored_prompt):
+    needs_public_identity_refresh = bool(
+        stored_prompt
+        and str(getattr(agent, "platform", "") or "").strip().lower() == "desktop"
+        and "Present yourself only as Benaiah" not in stored_prompt
+    )
+
+    if (
+        stored_prompt
+        and not needs_public_identity_refresh
+        and _stored_prompt_matches_runtime(agent, stored_prompt)
+    ):
         # Continuing session — reuse the exact system prompt from the
         # previous turn so the Anthropic cache prefix matches.
         agent._cached_system_prompt = stored_prompt
@@ -489,7 +499,14 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
 
         reconstruct_static_prefix(agent, system_message=system_message)
         return
-    if stored_prompt:
+    if needs_public_identity_refresh:
+        stored_state = "stale_public_identity"
+        logger.info(
+            "Stored system prompt for desktop session %s predates the Benaiah "
+            "public identity boundary; rebuilding once.",
+            agent.session_id,
+        )
+    elif stored_prompt:
         stored_state = "stale_runtime"
         logger.info(
             "Stored system prompt for session %s has stale runtime identity; "

@@ -72,6 +72,49 @@ class TestStoredPromptReuse:
         _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
         assert agent._cached_system_prompt == stored
 
+    def test_desktop_session_with_legacy_identity_rebuilds_once(self, caplog):
+        stored = "Legacy desktop identity and capabilities"
+        rebuilt = (
+            "You are Benaiah. Present yourself only as Benaiah and keep the "
+            "public identity boundary."
+        )
+        db = MagicMock()
+        db.get_session.return_value = {"system_prompt": stored}
+        agent = _make_agent(session_db=db, prebuilt_prompt=rebuilt)
+        agent.platform = "desktop"
+
+        with caplog.at_level(logging.INFO, logger="agent.conversation_loop"):
+            _restore_or_build_system_prompt(
+                agent,
+                None,
+                [{"role": "user", "content": "What can you do?"}],
+            )
+
+        assert agent._cached_system_prompt == rebuilt
+        agent._build_system_prompt.assert_called_once_with(None)
+        db.update_system_prompt.assert_called_once_with(agent.session_id, rebuilt)
+        assert any(
+            "predates the Benaiah public identity boundary" in record.getMessage()
+            for record in caplog.records
+        )
+
+    def test_desktop_session_with_current_benaiah_identity_is_reused(self):
+        stored = "Present yourself only as Benaiah. Current desktop prompt."
+        db = MagicMock()
+        db.get_session.return_value = {"system_prompt": stored}
+        agent = _make_agent(session_db=db)
+        agent.platform = "desktop"
+
+        _restore_or_build_system_prompt(
+            agent,
+            None,
+            [{"role": "user", "content": "Continue"}],
+        )
+
+        assert agent._cached_system_prompt == stored
+        agent._build_system_prompt.assert_not_called()
+        db.update_system_prompt.assert_not_called()
+
     def test_present_row_with_stale_runtime_identity_rebuilds(self, caplog):
         """Stored prompts are cache gold unless their runtime identity is stale.
 
