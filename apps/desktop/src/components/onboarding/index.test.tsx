@@ -1,10 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { $desktopOnboarding, type DesktopOnboardingState, type OnboardingContext } from '@/store/onboarding'
 import type { OAuthProvider } from '@/types/hermes'
 
-import { Picker } from '.'
+import { BenaiahAccountFirstRun, Picker } from '.'
 
 function provider(id: string, name = id): OAuthProvider {
   return {
@@ -123,5 +123,29 @@ describe('onboarding Picker', () => {
     render(<Picker ctx={ctx} />)
 
     expect(screen.queryByRole('button', { name: "I'll choose a provider later" })).toBeNull()
+  })
+})
+
+describe('Benaiah account first run', () => {
+  it('starts the browser account link without exposing provider or API-key choices', async () => {
+    const start = vi.fn().mockResolvedValue({ linked: false, opened: true })
+    const status = vi.fn().mockResolvedValue({ linked: false, pending: false })
+    const reopen = vi.fn().mockResolvedValue({ opened: true })
+
+    Object.defineProperty(window, 'hermesDesktop', {
+      configurable: true,
+      value: { benaiahAccount: { reopen, start, status } }
+    })
+
+    render(<BenaiahAccountFirstRun ctx={ctx} />)
+
+    await waitFor(() => expect(status).toHaveBeenCalled())
+    expect(screen.queryByText('Nous Portal')).toBeNull()
+    expect(screen.queryByText('I have an API key')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Benaiah' }))
+
+    await waitFor(() => expect(start).toHaveBeenCalledOnce())
+    expect(screen.getByText('Finish signing in in your browser')).toBeTruthy()
   })
 })

@@ -1397,6 +1397,11 @@ class ModelAssignment(BaseModel):
     # ``hermes model`` custom flow collects. Honored only on the main slot for
     # custom/local providers.
     api_key: str = ""
+    # Explicit transport mode for a custom endpoint. The Benaiah account
+    # gateway speaks the OpenAI Responses API, so first-run desktop onboarding
+    # uses ``codex_responses`` rather than the conservative custom-provider
+    # default of chat_completions.
+    api_mode: str = ""
     confirm_expensive_model: bool = False
     profile: Optional[str] = None
 
@@ -7025,6 +7030,7 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
     task = (body.task or "").strip().lower()
     base_url = (body.base_url or "").strip()
     api_key = (body.api_key or "").strip()
+    api_mode = (body.api_mode or "").strip()
 
     if scope not in {"main", "auxiliary"}:
         raise HTTPException(status_code=400, detail="scope must be 'main' or 'auxiliary'")
@@ -7061,7 +7067,7 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
         def _apply_assignment():
             with _profile_scope(body.profile or profile):
                 return _apply_model_assignment_sync(
-                    scope, provider, model, task, base_url, api_key
+                    scope, provider, model, task, base_url, api_key, api_mode
                 )
 
         return await asyncio.to_thread(_apply_assignment)
@@ -7073,7 +7079,13 @@ async def set_model_assignment(body: ModelAssignment, profile: Optional[str] = N
 
 
 def _apply_model_assignment_sync(
-    scope: str, provider: str, model: str, task: str, base_url: str, api_key: str = ""
+    scope: str,
+    provider: str,
+    model: str,
+    task: str,
+    base_url: str,
+    api_key: str = "",
+    api_mode: str = "",
 ):
     """Synchronous body of POST /api/model/set.
 
@@ -7094,6 +7106,10 @@ def _apply_model_assignment_sync(
         model_cfg = _apply_main_model_assignment(
             cfg.get("model", {}), provider, model, base_url, api_key
         )
+        if provider.strip().lower() in {"custom", "local"} and api_mode:
+            if api_mode not in {"chat_completions", "codex_responses", "anthropic_messages"}:
+                raise HTTPException(status_code=400, detail="Unsupported custom endpoint api_mode")
+            model_cfg["api_mode"] = api_mode
         # Fall back to the provider entry's stored key only when the request
         # didn't carry one — same precedence as the base_url fill above. An
         # unconditional overwrite silently discards a key the caller is

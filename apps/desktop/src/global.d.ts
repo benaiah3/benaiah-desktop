@@ -136,6 +136,15 @@ declare global {
       setKeepAwake?: (on: boolean) => void
       setPreviewShortcutActive?: (active: boolean) => void
       openExternal: (url: string) => Promise<void>
+      benaiahAccount: {
+        start: () => Promise<{ linked: boolean; opened: boolean }>
+        status: (profile?: string) => Promise<{
+          email?: string
+          linked: boolean
+          pending: boolean
+        }>
+        reopen: () => Promise<{ opened: boolean }>
+      }
       openPreviewInBrowser?: (url: string) => Promise<void>
       fetchLinkTitle: (url: string) => Promise<string>
       sanitizeWorkspaceCwd: (cwd?: null | string) => Promise<{ cwd: string; sanitized: boolean }>

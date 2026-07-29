@@ -4111,7 +4111,7 @@ function fetchJson(url, token, options: any = {}) {
         method: options.method || 'GET',
         headers: {
           'Content-Type': contentType,
-          'X-Hermes-Session-Token': token,
+          ...(token ? { 'X-Hermes-Session-Token': token } : {}),
           // RFC 8252 native flow authenticates the gated gateway with a bearer
           // token instead of the loopback session-token header. When
           // ``options.bearer`` is set we send Authorization: Bearer <token>;
@@ -6573,6 +6573,133 @@ function decryptDesktopSecret(secret) {
   }
 
   return value
+}
+
+// ---------------------------------------------------------------------------
+// Benaiah account linking.
+//
+// First-run users should never choose an inference vendor or paste an API key.
+// The public Benaiah gateway mints a scoped device pass, the system browser
+// attaches it to the user's passkey account through a one-time link, and this
+// app polls only for the resulting signed-in boolean. The pending pass is kept
+// in Electron safeStorage while the browser hand-off is in progress.
+// ---------------------------------------------------------------------------
+
+const BENAIAH_ACCOUNT_GATEWAY =
+  process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah-cli-gateway.vercel.app/api/cli/v1'
+
+function benaiahAccountLinkPath() {
+  return path.join(app.getPath('userData'), 'benaiah-account-link.json')
+}
+
+function readBenaiahAccountLink(): { linkUrl: string; token: string } | null {
+  try {
+    const payload = JSON.parse(fs.readFileSync(benaiahAccountLinkPath(), 'utf8'))
+    const token = decryptDesktopSecret(payload?.token)
+    const linkUrl = String(payload?.linkUrl || '')
+
+    return token && /^https:\/\/benaiah\.ai\//.test(linkUrl) ? { token, linkUrl } : null
+  } catch {
+    return null
+  }
+}
+
+function writeBenaiahAccountLink(token: string, linkUrl: string) {
+  const target = benaiahAccountLinkPath()
+
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.writeFileSync(
+    target,
+    JSON.stringify({ linkUrl, token: encryptDesktopSecret(token) }),
+    { mode: 0o600 }
+  )
+}
+
+function clearBenaiahAccountLink() {
+  try {
+    fs.unlinkSync(benaiahAccountLinkPath())
+  } catch {
+    // Missing/already-cleared pending state is fine.
+  }
+}
+
+async function beginBenaiahAccountLink() {
+  const issued: any = await fetchJson(`${BENAIAH_ACCOUNT_GATEWAY}/responses`, null, {
+    method: 'POST',
+    body: {},
+    timeoutMs: 15_000
+  })
+
+  const token = String(issued?.access_token || '')
+
+  if (!token.startsWith('bna_guest_')) {
+    throw new Error('Benaiah did not issue a valid desktop access pass.')
+  }
+
+  const link: any = await fetchJson(`${BENAIAH_ACCOUNT_GATEWAY}/device-link`, null, {
+    method: 'POST',
+    bearer: token,
+    body: { destination: 'account' },
+    timeoutMs: 15_000
+  })
+
+  const linkUrl = String(link?.url || '')
+
+  if (!/^https:\/\/benaiah\.ai\/profile\?/.test(linkUrl)) {
+    throw new Error('Benaiah did not return a valid account link.')
+  }
+
+  writeBenaiahAccountLink(token, linkUrl)
+
+  if (!openExternalUrl(linkUrl)) {
+    throw new Error('The Benaiah sign-in page could not be opened.')
+  }
+
+  return { linked: false, opened: true }
+}
+
+async function benaiahAccountLinkStatus(profile?: string) {
+  const pending = readBenaiahAccountLink()
+
+  if (!pending) {
+    return { linked: false, pending: false }
+  }
+
+  const usage: any = await fetchJson(`${BENAIAH_ACCOUNT_GATEWAY}/usage`, null, {
+    bearer: pending.token,
+    timeoutMs: 12_000
+  })
+
+  if (!usage?.identity?.signedIn) {
+    return { linked: false, pending: true }
+  }
+
+  await requestJsonForProfile(profile || 'default', '/api/model/set', 'POST', {
+    scope: 'main',
+    provider: 'custom',
+    model: 'benaiah-auto',
+    base_url: BENAIAH_ACCOUNT_GATEWAY,
+    api_key: pending.token,
+    api_mode: 'codex_responses'
+  } as any)
+
+  clearBenaiahAccountLink()
+
+  return {
+    linked: true,
+    pending: false,
+    email: typeof usage?.account?.email === 'string' ? usage.account.email : ''
+  }
+}
+
+function reopenBenaiahAccountLink() {
+  const pending = readBenaiahAccountLink()
+
+  if (!pending || !openExternalUrl(pending.linkUrl)) {
+    throw new Error('Start Benaiah sign-in again to create a fresh secure link.')
+  }
+
+  return { opened: true }
 }
 
 // Validate + normalize the per-profile remote overrides map read from disk.
@@ -10406,6 +10533,10 @@ ipcMain.handle('hermes:openExternal', (_event, url) => {
     throw new Error('Invalid external URL')
   }
 })
+
+ipcMain.handle('hermes:benaiah-account:start', () => beginBenaiahAccountLink())
+ipcMain.handle('hermes:benaiah-account:status', (_event, profile) => benaiahAccountLinkStatus(profile))
+ipcMain.handle('hermes:benaiah-account:reopen', () => reopenBenaiahAccountLink())
 
 // ── Find-in-page (Ctrl/Cmd+F) ─────────────────────────────────────────────
 // The desktop supports multiple BrowserWindows (one primary plus any

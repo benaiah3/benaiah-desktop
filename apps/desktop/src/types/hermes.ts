@@ -1156,6 +1156,9 @@ export interface MoaConfigResponse {
 }
 
 export interface ModelAssignmentRequest {
+  /** Explicit transport for a custom endpoint. Benaiah's account gateway uses
+   *  the OpenAI Responses API. */
+  api_mode?: 'anthropic_messages' | 'chat_completions' | 'codex_responses'
   /** Optional API key for a custom/local endpoint. Persisted to model.api_key
    *  (where the runtime reads it) for self-hosted endpoints that require auth.
    *  Only honored for custom/local providers on the main slot. */

@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -294,6 +294,7 @@ export function DesktopOnboardingOverlay({
   // immediately — no runtime gate needed. Otherwise wait for the readiness
   // check (configured === false) before showing the picker.
   const ready = onboarding.manual || (enabled && onboarding.configured === false)
+  const accountFirstRun = !onboarding.manual && !onboarding.localEndpoint
   const showPicker = flow.status === 'idle' || flow.status === 'success'
   // The final "you're in" screen drops the card chrome and floats centered on
   // the surface — same bare, cinematic treatment as the connecting overlay.
@@ -322,7 +323,7 @@ export function DesktopOnboardingOverlay({
             : 'translate-y-0 scale-100 opacity-100 blur-0'
         )}
       >
-        {showPicker || !ready ? <Header /> : null}
+        {accountFirstRun ? null : showPicker || !ready ? <Header /> : null}
         {onboarding.manual ? (
           <Button
             aria-label={t.common.close}
@@ -337,7 +338,9 @@ export function DesktopOnboardingOverlay({
         <div className="grid gap-3 p-5">
           {reason ? <ReasonNotice reason={reason} /> : null}
           {ready ? (
-            showPicker ? (
+            accountFirstRun ? (
+              <BenaiahAccountFirstRun ctx={ctx} />
+            ) : showPicker ? (
               <Picker ctx={ctx} />
             ) : (
               <FlowPanel ctx={ctx} flow={flow} leaving={leaving} onBegin={finalizeOnboarding} />
@@ -346,6 +349,152 @@ export function DesktopOnboardingOverlay({
             <Preparing boot={boot} />
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+type BenaiahAccountStage = 'error' | 'finishing' | 'idle' | 'waiting'
+
+export function BenaiahAccountFirstRun({ ctx }: { ctx: OnboardingContext }) {
+  const [stage, setStage] = useState<BenaiahAccountStage>('idle')
+  const [error, setError] = useState('')
+
+  const finish = useCallback(async () => {
+    setStage('finishing')
+    await refreshOnboarding(ctx)
+  }, [ctx])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void window.hermesDesktop.benaiahAccount
+      .status(ctx.profile)
+      .then(result => {
+        if (cancelled) {
+          return
+        }
+
+        if (result.linked) {
+          void finish()
+        } else if (result.pending) {
+          setStage('waiting')
+        }
+      })
+      .catch(() => {
+        // No pending link is a normal first launch. Starting one remains an
+        // explicit user action rather than an automatic browser pop-up.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [ctx, finish])
+
+  useEffect(() => {
+    if (stage !== 'waiting') {
+      return
+    }
+
+    let cancelled = false
+
+    const poll = async () => {
+      try {
+        const result = await window.hermesDesktop.benaiahAccount.status(ctx.profile)
+
+        if (!cancelled && result.linked) {
+          await finish()
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : 'Benaiah could not confirm this sign-in.')
+          setStage('error')
+        }
+      }
+    }
+
+    const timer = window.setInterval(() => void poll(), 2_000)
+
+    void poll()
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [ctx, finish, stage])
+
+  const begin = async () => {
+    setError('')
+    setStage('waiting')
+
+    try {
+      await window.hermesDesktop.benaiahAccount.start()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Benaiah sign-in could not start.')
+      setStage('error')
+    }
+  }
+
+  const reopen = async () => {
+    setError('')
+
+    try {
+      await window.hermesDesktop.benaiahAccount.reopen()
+      setStage('waiting')
+    } catch {
+      await begin()
+    }
+  }
+
+  return (
+    <div className="grid min-h-[20rem] place-items-center px-6 py-10 text-center">
+      <div className="grid max-w-md justify-items-center gap-5">
+        <div className="grid size-16 place-items-center rounded-[1.25rem] bg-foreground text-2xl font-semibold text-background">
+          B
+        </div>
+        <div className="grid gap-2">
+          <h2 className="text-2xl font-semibold tracking-tight">Continue with Benaiah</h2>
+          <p className="text-sm leading-6 text-(--ui-text-tertiary)">
+            Sign in once with your Benaiah passkey. Your plan, models and usage will be connected automatically.
+          </p>
+        </div>
+
+        {stage === 'idle' ? (
+          <Button className="min-w-56" onClick={() => void begin()} size="lg">
+            Continue with Benaiah
+          </Button>
+        ) : null}
+
+        {stage === 'waiting' ? (
+          <div className="grid justify-items-center gap-3" role="status">
+            <Loader2 className="size-5 animate-spin" />
+            <p className="text-sm font-medium">Finish signing in in your browser</p>
+            <p className="text-xs text-(--ui-text-tertiary)">Benaiah will continue here automatically.</p>
+            <Button onClick={() => void reopen()} size="sm" variant="outline">
+              Re-open sign-in
+            </Button>
+          </div>
+        ) : null}
+
+        {stage === 'finishing' ? (
+          <div className="flex items-center gap-2 text-sm font-medium" role="status">
+            <Check className="size-4" />
+            Connecting your Benaiah workspace…
+          </div>
+        ) : null}
+
+        {stage === 'error' ? (
+          <div className="grid justify-items-center gap-3">
+            <p className="text-sm text-destructive">{error || 'Benaiah sign-in could not be completed.'}</p>
+            <Button onClick={() => void begin()} size="sm">
+              Try again
+            </Button>
+          </div>
+        ) : null}
+
+        <p className="text-xs leading-5 text-(--ui-text-tertiary)">
+          No provider accounts or API keys required.
+        </p>
       </div>
     </div>
   )
