@@ -60,6 +60,25 @@ export function isRemoteReauthError(error: string | null | undefined): boolean {
   )
 }
 
+export function publicDesktopErrorMessage(error: string | null | undefined): string {
+  const raw = String(error || '').trim()
+
+  if (!raw) {
+    return ''
+  }
+
+  if (/failed to download (?:install\.sh|install\.ps1)|HTTP (?:404|429)/i.test(raw)) {
+    return 'Benaiah could not download its setup files. Check your connection, then try again.'
+  }
+
+  return raw
+    .replace(/^Error invoking remote method '[^']+': Error:\s*/i, '')
+    .replace(/https:\/\/raw\.githubusercontent\.com\/\S+/gi, 'the Benaiah setup service')
+    .replace(/(?:\/[^/\s]+)*\/\.hermes(?:\/[^\s.,;]*)?/gi, 'Benaiah’s private app data')
+    .replace(/%LOCALAPPDATA%\\hermes(?:\\[^\s.,;]*)?/gi, 'Benaiah’s private app data')
+    .replace(/\bHermes\b/gi, 'Benaiah')
+}
+
 // A remote, gated (oauth-bucket) gateway is a remote-reauth boot failure when the
 // session isn't connected OR the boot error is auth-shaped (connected-but-expired
 // — see isRemoteReauthError). Only re-establishing the remote session fixes it;
@@ -82,7 +101,7 @@ export function sshFailureMessage(
   const raw = String(error || '')
 
   if (config?.mode !== 'ssh') {
-    return raw
+    return publicDesktopErrorMessage(raw)
   }
 
   const text = raw.toLowerCase()

@@ -99,14 +99,16 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    expect(await screen.findByText('Set up Benaiah Desktop')).toBeTruthy()
-    expect(screen.getByText('Connect to existing Benaiah')).toBeTruthy()
-    expect(screen.getByText('Install Benaiah locally')).toBeTruthy()
+    expect(await screen.findByText('Set up Benaiah on this Mac')).toBeTruthy()
+    expect(screen.getByText('Advanced connection options')).toBeTruthy()
+    expect(screen.getByText('Set up on this Mac')).toBeTruthy()
+    expect(screen.queryByText(/Will install to/i)).toBeNull()
+    expect(screen.queryByText(/\.hermes/i)).toBeNull()
     expect(screen.queryByText(/steps complete/i)).toBeNull()
     expect(screen.queryByText(/Fetching installer manifest/i)).toBeNull()
   })
 
-  it('continues local bootstrap only when Install Benaiah locally is selected', async () => {
+  it('continues local bootstrap only when Set up on this Mac is selected', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
         setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
@@ -115,16 +117,16 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Install Benaiah locally'))
+    fireEvent.click(await screen.findByText('Set up on this Mac'))
 
     expect(desktop.continueBootstrapLocal).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('Set up Benaiah Desktop')).toBeTruthy()
+    expect(screen.getByText('Set up Benaiah on this Mac')).toBeTruthy()
 
     act(() => {
       desktop.emitBootstrapEvent({ type: 'manifest', protocolVersion: 1, stages: [] })
     })
 
-    await waitFor(() => expect(screen.queryByText('Set up Benaiah Desktop')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Set up Benaiah on this Mac')).toBeNull())
     expect(screen.getByText(/Fetching installer manifest/i)).toBeTruthy()
   })
 
@@ -138,7 +140,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    const install = (await screen.findByText('Install Benaiah locally')).closest('button') as HTMLButtonElement
+    const install = (await screen.findByText('Set up on this Mac')).closest('button') as HTMLButtonElement
     fireEvent.click(install)
 
     expect(
@@ -160,7 +162,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     // Click the instant the choice paints, before React drains the passive
     // effect that reacts to the first snapshot. A loaded runner hits this
     // window by accident; observing the DOM directly hits it every time.
-    const install = (await whenPresent('Install Benaiah locally')).closest('button') as HTMLButtonElement
+    const install = (await whenPresent('Set up on this Mac')).closest('button') as HTMLButtonElement
     fireEvent.click(install)
 
     await act(async () => {
@@ -180,7 +182,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click((await screen.findByText('Install Benaiah locally')).closest('button') as HTMLButtonElement)
+    fireEvent.click((await screen.findByText('Set up on this Mac')).closest('button') as HTMLButtonElement)
     expect(
       await screen.findByText('Local installation could not start. Restart Benaiah Desktop and try again.')
     ).toBeTruthy()
@@ -206,7 +208,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Benaiah'))
+    fireEvent.click(await screen.findByText('Advanced connection options'))
 
     expect(await screen.findByText('Gateway URL')).toBeTruthy()
     expect(screen.getByText('Test connection')).toBeTruthy()
@@ -222,13 +224,13 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Benaiah'))
+    fireEvent.click(await screen.findByText('Advanced connection options'))
     expect(await screen.findByText('Gateway URL')).toBeTruthy()
 
     fireEvent.click(screen.getByText('Back'))
 
-    expect(await screen.findByText('Set up Benaiah Desktop')).toBeTruthy()
-    expect(screen.getByText('Install Benaiah locally')).toBeTruthy()
+    expect(await screen.findByText('Set up Benaiah on this Mac')).toBeTruthy()
+    expect(screen.getByText('Set up on this Mac')).toBeTruthy()
   })
 
   it('requires a successful token connection test before applying remote config', async () => {
@@ -259,8 +261,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Benaiah'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
+    fireEvent.click(await screen.findByText('Advanced connection options'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/benaiah'), {
       target: { value: 'https://gateway.example.com/hermes' }
     })
 
@@ -318,8 +320,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Benaiah'))
-    const urlInput = await screen.findByPlaceholderText('https://gateway.example.com/hermes')
+    fireEvent.click(await screen.findByText('Advanced connection options'))
+    const urlInput = await screen.findByPlaceholderText('https://gateway.example.com/benaiah')
     fireEvent.change(urlInput, { target: { value: 'https://gateway.example.com/hermes' } })
 
     await act(async () => {
@@ -371,8 +373,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Benaiah'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
+    fireEvent.click(await screen.findByText('Advanced connection options'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/benaiah'), {
       target: { value: 'https://gateway.example.com/hermes' }
     })
 
@@ -422,8 +424,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Benaiah'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
+    fireEvent.click(await screen.findByText('Advanced connection options'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/benaiah'), {
       target: { value: 'https://gateway.example.com/hermes' }
     })
 
@@ -474,8 +476,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Benaiah'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
+    fireEvent.click(await screen.findByText('Advanced connection options'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/benaiah'), {
       target: { value: 'https://gateway.example.com/hermes' }
     })
 
@@ -555,7 +557,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
       return { mode: 'remote' }
     })
 
-    fireEvent.change(screen.getByPlaceholderText('https://gateway.example.com/hermes'), {
+    fireEvent.change(screen.getByPlaceholderText('https://gateway.example.com/benaiah'), {
       target: { value: 'https://gateway.example.com/hermes' }
     })
 

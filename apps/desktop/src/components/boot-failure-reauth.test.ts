@@ -7,6 +7,7 @@ import {
   isRemoteConfig,
   isRemoteReauthError,
   isRemoteReauthFailure,
+  publicDesktopErrorMessage,
   signInLabel,
   sshFailureMessage
 } from './boot-failure-reauth'
@@ -118,6 +119,18 @@ describe('sshFailureMessage', () => {
     expect(sshFailureMessage(ssh, 'SSH authentication failed', copy)).toBe('localized auth')
     expect(sshFailureMessage(ssh, 'unexpected failure', copy)).toBe('localized unknown')
     expect(sshFailureMessage(config(), 'raw remote error', copy)).toBe('raw remote error')
+  })
+})
+
+describe('publicDesktopErrorMessage', () => {
+  it('turns bootstrap download failures into a short, Benaiah-only recovery message', () => {
+    const raw =
+      "Error invoking remote method 'hermes:connection': Error: Hermes bootstrap failed: Failed to download install.sh: HTTP 429 from https://raw.githubusercontent.com/NousResearch/hermes-agent/ref/scripts/install.sh. Check /Users/me/.hermes/logs/desktop.log."
+
+    const message = publicDesktopErrorMessage(raw)
+
+    expect(message).toBe('Benaiah could not download its setup files. Check your connection, then try again.')
+    expect(message).not.toMatch(/Hermes|NousResearch|\.hermes|githubusercontent/i)
   })
 })
 

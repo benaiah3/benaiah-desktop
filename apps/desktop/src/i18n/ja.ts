@@ -2063,7 +2063,7 @@ export const ja = defineLocale({
       'ゲートウェイ URL を入力してください。Benaiah Desktop がトークンとブラウザーサインインのどちらが必要かを検出します。',
     remoteUrlTitle: 'ゲートウェイ URL',
     remoteUrlDesc: 'Benaiah ゲートウェイのベース URL を使用します。リモートの場合は https:// を含めてください。',
-    remoteUrlPlaceholder: 'https://gateway.example.com/hermes',
+    remoteUrlPlaceholder: 'https://gateway.example.com/benaiah',
     probing: 'ゲートウェイ認証方式を検出中...',
     probeError: 'その Benaiah ゲートウェイに到達できませんでした。',
     identityProvider: 'ID プロバイダー',

@@ -19,6 +19,7 @@ import { AlertCircle, ChevronDown, ChevronRight, Globe, iconSize, Loader2, Monit
 import { capitalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
 
+import { publicDesktopErrorMessage } from './boot-failure-reauth'
 import { FirstRunRemoteForm } from './first-run-remote-form'
 
 /**
@@ -333,16 +334,6 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
     }
   }, [state.log.length, logOpen])
 
-  // Auto-expand the log panel when a bootstrap fails so the user immediately
-  // sees the install.ps1 output. Without this, the failure block shows just
-  // the top-level error message and the user has to click "Show installer
-  // output" to see WHY the stage failed.
-  useEffect(() => {
-    if (state.error) {
-      setLogOpen(true)
-    }
-  }, [state.error])
-
   // The choice remains mounted while main hands off to local bootstrap. Once
   // a manifest/failure takes ownership (or a later repair presents a fresh
   // choice), this transient button state must not leak across phases — so it
@@ -408,21 +399,9 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="mt-6 grid gap-3">
             <button
-              className="rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-4 text-left transition hover:bg-(--chrome-action-hover)"
-              onClick={() => setRemoteOpen(true)}
-              type="button"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Globe className="size-4 text-muted-foreground" />
-                <span>{copy.connectExistingTitle}</span>
-              </div>
-              <p className="mt-2 text-sm leading-5 text-muted-foreground">{copy.connectExistingDesc}</p>
-            </button>
-
-            <button
-              className="rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-4 text-left transition hover:bg-(--chrome-action-hover) disabled:cursor-wait disabled:opacity-60"
+              className="rounded-xl bg-foreground px-5 py-4 text-left text-background transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
               disabled={localStarting}
               onClick={async () => {
                 setLocalStart({ root: activeRoot, starting: true, error: null })
@@ -443,27 +422,31 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
             >
               <div className="flex items-center gap-2 text-sm font-medium">
                 {localStarting ? (
-                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <Monitor className="size-4 text-muted-foreground" />
+                  <Monitor className="size-4" />
                 )}
                 <span>{copy.installLocalTitle}</span>
               </div>
-              <p className="mt-2 text-sm leading-5 text-muted-foreground">{copy.installLocalDesc}</p>
+              <p className="mt-1.5 text-sm leading-5 opacity-70">{copy.installLocalDesc}</p>
+            </button>
+
+            <button
+              className="mx-auto flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-(--chrome-action-hover) hover:text-foreground"
+              onClick={() => setRemoteOpen(true)}
+              type="button"
+            >
+              <Globe className="size-4" />
+              <span>{copy.connectExistingTitle}</span>
             </button>
           </div>
 
           {localStartError ? (
             <div className="mt-4 flex items-start gap-2 text-sm text-destructive">
               <AlertCircle className="mt-0.5 size-4 shrink-0" />
-              <span>{localStartError}</span>
+              <span>{publicDesktopErrorMessage(localStartError)}</span>
             </div>
           ) : null}
-
-          <div className="mt-6 text-xs text-muted-foreground">
-            {copy.installTo}{' '}
-            <code className="font-mono text-(--ui-text-secondary)">{state.setupChoice.activeRoot}</code>
-          </div>
         </div>
       </div>
     )
@@ -593,7 +576,9 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
               <ErrorIcon className="mt-0.5 shrink-0" size="1rem" />
               <div className="min-w-0">
                 <div className="font-medium text-destructive">{copy.error}</div>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-foreground/90">{state.error}</p>
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-foreground/90">
+                  {publicDesktopErrorMessage(state.error)}
+                </p>
               </div>
             </div>
           )}
@@ -628,7 +613,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
                     {state.log.map((entry, i) => (
                       <div className={cn(entry.stream === 'stderr' && 'text-muted-foreground/70')} key={i}>
                         {entry.stage ? <span className="text-muted-foreground/60">[{entry.stage}] </span> : null}
-                        <span>{entry.line}</span>
+                        <span>{publicDesktopErrorMessage(entry.line)}</span>
                       </div>
                     ))}
                     <div ref={logEndRef} />
@@ -668,10 +653,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
         {failed && (
           <div className="flex-shrink-0 bg-card p-4">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">
-                {copy.transcriptSaved}{' '}
-                <code className="font-mono text-(--ui-text-secondary)">%LOCALAPPDATA%\hermes\logs\</code>
-              </span>
+              <span className="text-xs text-muted-foreground">{copy.transcriptSaved}</span>
               <div className="flex gap-2">
                 <Button
                   onClick={async () => {
