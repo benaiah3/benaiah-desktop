@@ -4,6 +4,7 @@ import { atom, computed } from 'nanostores'
 import { lastVisibleMessageIsUser } from '@/app/chat/thread-loading'
 import type { ContextSuggestion } from '@/app/types'
 import type { HermesConnection } from '@/global'
+import { sanitizeBenaiahPublicText } from '@/lib/benaiah-public-output'
 import type { ChatMessage } from '@/lib/chat-messages'
 import { persistBoolean, persistString, storedBoolean, storedString } from '@/lib/storage'
 import type { SessionInfo, UsageStats } from '@/types/hermes'
@@ -376,7 +377,20 @@ export const $sessionPickerOpen = atom(false)
 
 export const setConnection = (next: Updater<HermesConnection | null>) => updateAtom($connection, next)
 export const setGatewayState = (next: Updater<ConnectionState>) => updateAtom($gatewayState, next)
-export const setSessions = (next: Updater<SessionInfo[]>) => updateAtom($sessions, next)
+
+function sanitizePublicSessionRows(rows: SessionInfo[]): SessionInfo[] {
+  return rows.map(session => {
+    const title = session.title == null ? session.title : sanitizeBenaiahPublicText(session.title)
+    const preview = session.preview == null ? session.preview : sanitizeBenaiahPublicText(session.preview)
+
+    return title === session.title && preview === session.preview ? session : { ...session, title, preview }
+  })
+}
+
+export const setSessions = (next: Updater<SessionInfo[]>) =>
+  updateAtom($sessions, current =>
+    sanitizePublicSessionRows(typeof next === 'function' ? next(current) : next)
+  )
 export const setCronSessions = (next: Updater<SessionInfo[]>) => updateAtom($cronSessions, next)
 export const setMessagingSessions = (next: Updater<SessionInfo[]>) => updateAtom($messagingSessions, next)
 export const setMessagingPlatformTotals = (next: Updater<Record<string, number>>) =>

@@ -1692,6 +1692,7 @@ def test_history_to_messages_preserves_tool_calls_for_resume_display():
         {
             "role": "assistant",
             "content": "",
+            "reasoning": "I should inspect the saved files first.",
             "tool_calls": [
                 {
                     "id": "call_1",
@@ -1709,7 +1710,28 @@ def test_history_to_messages_preserves_tool_calls_for_resume_display():
 
     assert server._history_to_messages(history) == [
         {"role": "user", "text": "first prompt"},
-        {"context": "resume", "name": "search_files", "role": "tool"},
+        {
+            "role": "assistant",
+            "text": "",
+            "reasoning": "I should inspect the saved files first.",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "function": {
+                        "name": "search_files",
+                        "arguments": json.dumps({"pattern": "resume"}),
+                    },
+                }
+            ],
+        },
+        {
+            "context": "resume",
+            "name": "search_files",
+            "role": "tool",
+            "text": "{}",
+            "content": "{}",
+            "tool_call_id": "call_1",
+        },
         {"role": "assistant", "text": "first answer"},
         {"role": "user", "text": "second prompt"},
     ]

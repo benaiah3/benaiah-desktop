@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { getSession } from '@/hermes'
+import { sanitizeBenaiahPublicText } from '@/lib/benaiah-public-output'
 import { parseSessionRefValue, sessionRefCacheKey, sessionRefFallbackLabel } from '@/lib/session-refs'
 import { $sessions, sessionMatchesStoredId } from '@/store/session'
 import type { SessionInfo } from '@/types/hermes'
@@ -21,7 +22,7 @@ const titleSubs = new Map<string, Set<(value: string) => void>>()
  *  fallback is a worse chip label than the short id, so an untitled row
  *  resolves to empty and the caller's fallback wins. */
 function sessionRowTitle(row: SessionInfo): string {
-  return row.title?.trim() || row.preview?.trim() || ''
+  return sanitizeBenaiahPublicText(row.title?.trim() || row.preview?.trim() || '')
 }
 
 function profileMatches(sessionProfile: null | string | undefined, target?: string): boolean {

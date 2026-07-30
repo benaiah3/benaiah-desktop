@@ -3,6 +3,7 @@ import type { ThreadMessage } from '@assistant-ui/react'
 import type { QuickModelOption } from '@/app/chat/composer/types'
 import type { ClientSessionState, CommandDispatchResponse } from '@/app/types'
 import { formatRefValue } from '@/components/assistant-ui/directive-text'
+import { sanitizeBenaiahPublicText } from '@/lib/benaiah-public-output'
 import { type ChatMessage, type ChatMessagePart, chatMessageText, textPart } from '@/lib/chat-messages'
 import { normalize } from '@/lib/text'
 import type { ComposerAttachment } from '@/store/composer'
@@ -62,12 +63,12 @@ export function createClientSessionState(
 }
 
 export function sessionTitle(session: SessionInfo): string {
-  return session.title?.trim() || session.preview?.trim() || 'Untitled session'
+  return sanitizeBenaiahPublicText(session.title?.trim() || session.preview?.trim() || 'Untitled session')
 }
 
 export function coerceGatewayText(value: unknown): string {
   if (typeof value === 'string') {
-    return value
+    return sanitizeBenaiahPublicText(value)
   }
 
   if (value === null || value === undefined) {
@@ -75,7 +76,8 @@ export function coerceGatewayText(value: unknown): string {
   }
 
   if (Array.isArray(value)) {
-    return value
+    return sanitizeBenaiahPublicText(
+      value
       .map(item => {
         if (typeof item === 'string') {
           return item
@@ -96,27 +98,28 @@ export function coerceGatewayText(value: unknown): string {
         return ''
       })
       .join('')
+    )
   }
 
   if (typeof value === 'object') {
     const row = value as Record<string, unknown>
 
     if (typeof row.text === 'string') {
-      return row.text
+      return sanitizeBenaiahPublicText(row.text)
     }
 
     if (typeof row.output_text === 'string') {
-      return row.output_text
+      return sanitizeBenaiahPublicText(row.output_text)
     }
 
     try {
-      return JSON.stringify(value)
+      return sanitizeBenaiahPublicText(JSON.stringify(value))
     } catch {
       return ''
     }
   }
 
-  return String(value)
+  return sanitizeBenaiahPublicText(String(value))
 }
 
 /**

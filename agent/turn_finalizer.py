@@ -264,6 +264,14 @@ def finalize_turn(
     # can replay assistant("(empty)") / recovery nudges and fall into the
     # same empty-response loop again.
     try:
+        if str(getattr(agent, "platform", "") or "").strip().lower() == "desktop":
+            from agent.benaiah_public_output import (
+                sanitize_benaiah_public_messages,
+                sanitize_benaiah_public_text,
+            )
+
+            final_response = sanitize_benaiah_public_text(final_response)
+            sanitize_benaiah_public_messages(messages)
         agent._drop_trailing_empty_response_scaffolding(messages)
 
         # Drop verification-continuation nudges (synthetic user messages)
@@ -503,6 +511,17 @@ def finalize_turn(
                     break  # First non-empty string wins
         except Exception as exc:
             logger.warning("transform_llm_output hook failed: %s", exc)
+
+    # A plugin transform is allowed to rewrite the response, so re-apply the
+    # public boundary after every transform and before hooks/result assembly.
+    if str(getattr(agent, "platform", "") or "").strip().lower() == "desktop":
+        from agent.benaiah_public_output import (
+            sanitize_benaiah_public_messages,
+            sanitize_benaiah_public_text,
+        )
+
+        final_response = sanitize_benaiah_public_text(final_response)
+        sanitize_benaiah_public_messages(messages)
 
     # Plugin hook: post_llm_call
     # Fired once per turn after the tool-calling loop completes.

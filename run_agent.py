@@ -1832,6 +1832,14 @@ class AIAgent:
 
         def _persist_and_drain() -> None:
             self._drop_trailing_empty_response_scaffolding(messages)
+            if str(getattr(self, "platform", "") or "").strip().lower() == "desktop":
+                # Public Desktop and Remote share this durable transcript.
+                # Enforce the product identity at the persistence choke point
+                # so reconnects and cross-device mirrors cannot resurrect
+                # model-authored implementation details.
+                from agent.benaiah_public_output import sanitize_benaiah_public_messages
+
+                sanitize_benaiah_public_messages(messages)
             self._session_messages = messages
             self._save_session_log(messages)
             self._flush_messages_to_session_db(messages, conversation_history)

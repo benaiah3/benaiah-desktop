@@ -1387,7 +1387,70 @@ def _event_frame(event: str, sid: str, payload: dict | None = None) -> dict:
     return {"jsonrpc": "2.0", "method": "event", "params": params}
 
 
+def _benaiah_public_session(session: dict | None) -> bool:
+    if not isinstance(session, dict):
+        return False
+    if str(session.get("source") or "").strip().lower() == "desktop":
+        return True
+    agent = session.get("agent")
+    return str(getattr(agent, "platform", "") or "").strip().lower() == "desktop"
+
+
 def _emit(event: str, sid: str, payload: dict | None = None):
+    session = _sessions.get(sid)
+    if _benaiah_public_session(session):
+        from agent.benaiah_public_output import (
+            BenaiahPublicTextStream,
+            sanitize_benaiah_public_payload,
+        )
+
+        assert session is not None
+        streams = session.setdefault("_benaiah_public_streams", {})
+        if event == "message.start":
+            streams.clear()
+
+        stream_key = (
+            "message"
+            if event == "message.delta"
+            else "reasoning" if event == "reasoning.delta" else None
+        )
+        if stream_key and isinstance(payload, dict):
+            stream = streams.setdefault(stream_key, BenaiahPublicTextStream())
+            safe_text = stream.feed(payload.get("text"))
+            if not safe_text:
+                return
+            payload = dict(payload)
+            payload["text"] = safe_text
+            # This is a cumulative rendering of the unsanitized source. Let
+            # both clients render the authoritative safe delta themselves.
+            payload.pop("rendered", None)
+        else:
+            flush_events = []
+            if event in {"tool.start", "message.interim", "message.complete", "error"}:
+                flush_events.append("message")
+            if event in {
+                "tool.start",
+                "message.interim",
+                "message.complete",
+                "reasoning.available",
+                "error",
+            }:
+                flush_events.append("reasoning")
+            for key in flush_events:
+                stream = streams.pop(key, None)
+                if stream is None:
+                    continue
+                tail = stream.flush()
+                if tail:
+                    write_json(
+                        _event_frame(
+                            f"{key}.delta",
+                            sid,
+                            {"text": tail},
+                        )
+                    )
+            if isinstance(payload, dict):
+                payload = sanitize_benaiah_public_payload(dict(payload))
     write_json(_event_frame(event, sid, payload))
 
 
@@ -6453,6 +6516,12 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
         content_text = _coerce_message_text(m.get("content"))
         if _is_display_hidden_marker(role, content_text):
             continue
+        reasoning_keys = (
+            "reasoning",
+            "reasoning_content",
+            "reasoning_details",
+            "codex_reasoning_items",
+        )
         if role == "assistant" and m.get("tool_calls"):
             for tc in m["tool_calls"]:
                 fn = tc.get("function", {})
@@ -6463,16 +6532,19 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
                     except (json.JSONDecodeError, TypeError):
                         args = {}
                     tool_call_args[tc_id] = (fn["name"], args)
-            if not content_text.strip():
-                continue
         if role == "tool":
             tc_id = m.get("tool_call_id", "")
             tc_info = tool_call_args.get(tc_id) if tc_id else None
             name = (tc_info[0] if tc_info else None) or m.get("tool_name") or "tool"
             args = (tc_info[1] if tc_info else None) or {}
-            messages.append(
-                {"role": "tool", "name": name, "context": _tool_ctx(name, args)}
-            )
+            messages.append({
+                "role": "tool",
+                "name": name,
+                "context": _tool_ctx(name, args),
+                "text": content_text,
+                "content": content_text,
+                "tool_call_id": tc_id,
+            })
             continue
         # An assistant turn may carry only reasoning/thinking content with no
         # visible text (extended-thinking turns, thinking-only recovery
@@ -6481,16 +6553,11 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
         # it vanish from the resumed/reloaded session view while the desktop's
         # reasoning disclosure has nothing to render. Keep it when it carries
         # reasoning so the "Thinking…" block still shows. (#44022)
-        reasoning_keys = (
-            "reasoning",
-            "reasoning_content",
-            "reasoning_details",
-            "codex_reasoning_items",
-        )
         has_reasoning = role == "assistant" and any(
             m.get(key) for key in reasoning_keys
         )
-        if not content_text.strip() and not has_reasoning:
+        has_tool_calls = role == "assistant" and bool(m.get("tool_calls"))
+        if not content_text.strip() and not has_reasoning and not has_tool_calls:
             continue
         msg = {"role": role, "text": content_text}
         if role == "user":
@@ -6505,6 +6572,8 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
             for key in reasoning_keys:
                 if key in m and m.get(key) is not None:
                     msg[key] = m.get(key)
+            if has_tool_calls:
+                msg["tool_calls"] = m.get("tool_calls")
         # Forward display-only timeline metadata so the TUI can render
         # model switches and delegation completions as events instead of
         # opaque user messages, and hide compaction handoffs entirely.
@@ -7171,6 +7240,21 @@ def _(rid, params: dict) -> dict:
     # without requiring the user to submit a first prompt.
     _schedule_agent_build(sid)
     _schedule_session_cap_enforcement()  # trim detached idle sessions over the cap
+    if is_truthy_value(params.get("remote_focus", False)):
+        # An explicit "New session" tap in Remote is user intent, unlike the
+        # Desktop's speculative blank draft created to paint its composer.
+        # Materialise this one empty row and focus it on Desktop immediately so
+        # both devices enter the same session before either sends a message.
+        session = _sessions.get(sid)
+        if session is not None:
+            _ensure_session_db_row(session)
+            _broadcast_global_event(
+                "session.remote_focus",
+                {
+                    "runtime_session_id": sid,
+                    "stored_session_id": str(session.get("session_key") or sid),
+                },
+            )
 
     return _ok(
         rid,
@@ -8093,10 +8177,15 @@ def _live_session_payload(
     # matches the eager session.resume + REST transcript; the DB has its own
     # lock, so read it outside the session history lock.
     history = _live_visible_history(session, _get_db(), in_memory_history)
+    messages = _history_to_messages(history)
+    if _benaiah_public_session(session):
+        from agent.benaiah_public_output import sanitize_benaiah_public_messages
+
+        sanitize_benaiah_public_messages(messages)
     payload = {
         "info": _fallback_session_info(session),
         "message_count": len(history),
-        "messages": _history_to_messages(history),
+        "messages": messages,
         "running": running,
         "session_id": sid,
         "session_key": _session_lookup_key(session, fallback=sid),
@@ -12446,6 +12535,7 @@ def _run_prompt_submit(
             ):
                 try:
                     from agent.title_generator import maybe_auto_title
+                    from agent.benaiah_public_output import sanitize_benaiah_public_text
 
                     _title_key = session.get("session_key") or sid
                     # Snapshot the runtime identity; the validator lets the
@@ -12479,6 +12569,11 @@ def _run_prompt_submit(
                         # runs async, after this turn's refresh already fired).
                         title_callback=lambda t, _k=_title_key: _emit(
                             "session.title", sid, {"session_id": _k, "title": t}
+                        ),
+                        title_transform=(
+                            sanitize_benaiah_public_text
+                            if _benaiah_public_session(session)
+                            else None
                         ),
                     )
                 except Exception:

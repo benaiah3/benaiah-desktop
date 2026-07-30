@@ -51,6 +51,7 @@ from agent.prompt_builder import (
     drain_truncation_warnings,
 )
 from agent.runtime_cwd import resolve_context_cwd
+from agent.benaiah_public_output import BENAIAH_PUBLIC_OUTPUT_CONTRACT
 from hermes_constants import get_hermes_home
 from utils import is_truthy_value
 
@@ -571,6 +572,12 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     if agent.platform:
         timestamp_line += f"\nPlatform: {agent.platform}"
     volatile_parts.append(timestamp_line)
+    if benaiah_public_surface:
+        # Keep this as the final prompt segment. The stable identity block
+        # establishes the product persona; this terminal contract remains the
+        # nearest instruction even when memory, workspace context, skills, or
+        # an internal profile contains implementation terminology.
+        volatile_parts.append(BENAIAH_PUBLIC_OUTPUT_CONTRACT)
 
     return {
         "stable":   "\n\n".join(p.strip() for p in stable_parts   if p and p.strip()),

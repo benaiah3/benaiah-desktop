@@ -1,6 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react'
 import { type BillingBlock, skillInvocationText } from '@hermes/shared'
 
+import { sanitizeBenaiahPublicText } from '@/lib/benaiah-public-output'
 import { extractImageRefs } from '@/lib/embedded-images'
 import { dedupeGeneratedImageEchoesInParts } from '@/lib/generated-images'
 import { mediaDisplayLabel, mediaMarkdownHref } from '@/lib/media'
@@ -119,7 +120,7 @@ export function textPart(text: string): ChatMessagePart {
 }
 
 export function reasoningPart(text: string): ChatMessagePart {
-  return { type: 'reasoning', text }
+  return { type: 'reasoning', text: sanitizeBenaiahPublicText(text) }
 }
 
 const MEDIA_LINE_RE = /(^|\n)[\t ]*[`"']?MEDIA:\s*(?<line>`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|\S+)[`"']?[\t ]*(\n|$)/g
@@ -151,7 +152,7 @@ export function renderMediaTags(text: string): string {
 }
 
 export function assistantTextPart(text: string): ChatMessagePart {
-  return textPart(renderMediaTags(text))
+  return textPart(renderMediaTags(sanitizeBenaiahPublicText(text)))
 }
 
 export function chatMessageText(message: ChatMessage): string {

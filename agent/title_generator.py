@@ -242,6 +242,7 @@ def auto_title_session(
     main_runtime: dict = None,
     title_callback: Optional[TitleCallback] = None,
     runtime_validator: Optional[RuntimeValidator] = None,
+    title_transform=None,
 ) -> None:
     """Generate and set a session title if one doesn't already exist.
 
@@ -271,6 +272,7 @@ def auto_title_session(
             main_runtime=main_runtime,
             title_callback=title_callback,
             runtime_validator=runtime_validator,
+            title_transform=title_transform,
         )
     except Exception as e:
         # WARNING (not debug) so operators see it in agent.log; the message
@@ -297,6 +299,7 @@ def _auto_title_session(
     main_runtime: dict = None,
     title_callback: Optional[TitleCallback] = None,
     runtime_validator: Optional[RuntimeValidator] = None,
+    title_transform=None,
 ) -> None:
     """Body of :func:`auto_title_session` — see its docstring."""
     if not session_db or not session_id:
@@ -338,6 +341,13 @@ def _auto_title_session(
     )
     if not title:
         return
+    if callable(title_transform):
+        try:
+            title = title_transform(title)
+        except Exception:
+            logger.debug("Auto-title transform failed", exc_info=True)
+        if not title:
+            return
 
     try:
         persisted = _persist_session_title(session_db, session_id, title)
@@ -363,6 +373,7 @@ def maybe_auto_title(
     main_runtime: dict = None,
     title_callback: Optional[TitleCallback] = None,
     runtime_validator: Optional[RuntimeValidator] = None,
+    title_transform=None,
 ) -> None:
     """Fire-and-forget title generation after the first exchange.
 
@@ -387,15 +398,19 @@ def maybe_auto_title(
         logger.debug("Auto-title skipped: auxiliary.title_generation.enabled=false")
         return
 
+    title_kwargs = {
+        "failure_callback": failure_callback,
+        "main_runtime": main_runtime,
+        "title_callback": title_callback,
+        "runtime_validator": runtime_validator,
+    }
+    if title_transform is not None:
+        title_kwargs["title_transform"] = title_transform
+
     thread = threading.Thread(
         target=auto_title_session,
         args=(session_db, session_id, user_message, assistant_response),
-        kwargs={
-            "failure_callback": failure_callback,
-            "main_runtime": main_runtime,
-            "title_callback": title_callback,
-            "runtime_validator": runtime_validator,
-        },
+        kwargs=title_kwargs,
         daemon=True,
         name="auto-title",
     )
