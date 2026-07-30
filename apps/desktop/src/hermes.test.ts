@@ -391,6 +391,52 @@ describe('Hermes REST helpers', () => {
     })
   })
 
+  it('prefers Benaiah managed transcription when the desktop account is linked', async () => {
+    const transcribe = vi.fn().mockResolvedValue({
+      ok: true,
+      provider: 'benaiah-cloud',
+      transcript: 'nuanced British English'
+    })
+    Object.defineProperty(window, 'hermesDesktop', {
+      configurable: true,
+      value: { api, benaiahAccount: { transcribe } }
+    })
+
+    await expect(transcribeAudio('data:audio/webm;base64,AA==', 'audio/webm')).resolves.toEqual({
+      ok: true,
+      provider: 'benaiah-cloud',
+      transcript: 'nuanced British English'
+    })
+
+    expect(transcribe).toHaveBeenCalledWith('data:audio/webm;base64,AA==', 'audio/webm')
+    expect(api).not.toHaveBeenCalled()
+  })
+
+  it('falls back to local transcription when managed transcription is unavailable', async () => {
+    const transcribe = vi.fn().mockResolvedValue(null)
+    Object.defineProperty(window, 'hermesDesktop', {
+      configurable: true,
+      value: { api, benaiahAccount: { transcribe } }
+    })
+    api.mockResolvedValueOnce({
+      ok: true,
+      provider: 'local',
+      transcript: 'offline fallback'
+    })
+
+    await expect(transcribeAudio('data:audio/webm;base64,AA==', 'audio/webm')).resolves.toEqual({
+      ok: true,
+      provider: 'local',
+      transcript: 'offline fallback'
+    })
+
+    expect(api).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/api/audio/transcribe'
+      })
+    )
+  })
+
   it('defaults model options to configured providers only', async () => {
     await getGlobalModelOptions()
 

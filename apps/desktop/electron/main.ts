@@ -6671,6 +6671,8 @@ const BENAIAH_ACCOUNT_GATEWAY =
   process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah.ai/api/cli/v1'
 const BENAIAH_REMOTE_API =
   process.env.BENAIAH_REMOTE_API || 'https://benaiah.ai/api'
+const BENAIAH_TRANSCRIPTION_API =
+  process.env.BENAIAH_TRANSCRIPTION_API || `${BENAIAH_REMOTE_API}/voice-session`
 
 let benaiahRemoteHost: RemoteAccessHost | null = null
 let benaiahRemoteStatus: RemoteHostStatus = { state: 'stopped' }
@@ -6707,6 +6709,51 @@ function readBenaiahAccount(): BenaiahAccountCredential | null {
   } catch {
     return null
   }
+}
+
+async function transcribeWithBenaiah(dataUrl: string, mimeType = 'audio/webm') {
+  // The account credential stays in Electron safeStorage and the OpenAI key
+  // stays on Benaiah's server. A linked account is the trust boundary for using
+  // the managed transcription service; callers retain local STT as a fallback.
+  const account = readBenaiahAccount()
+
+  if (!account) {
+    return null
+  }
+
+  const match = String(dataUrl || '').match(/^data:([^;,]+)?(?:;[^,]*)?;base64,([A-Za-z0-9+/=\s]+)$/)
+
+  if (!match) {
+    throw new Error('The recorded audio payload is invalid.')
+  }
+
+  const audioBase64 = match[2].replace(/\s+/g, '')
+  const resolvedMimeType = String(mimeType || match[1] || 'audio/webm').split(';')[0].trim()
+
+  // Match the web/mobile service limit before allocating or sending a request.
+  if (!audioBase64 || Math.ceil((audioBase64.length * 3) / 4) > 2_500_000) {
+    return null
+  }
+
+  const result: any = await fetchJson(BENAIAH_TRANSCRIPTION_API, null, {
+    method: 'POST',
+    bearer: account.token,
+    body: {
+      action: 'transcribe',
+      audioBase64,
+      mimeType: resolvedMimeType
+    },
+    timeoutMs: 90_000
+  })
+  const transcript = String(result?.text || '').trim()
+
+  return result?.ok && transcript
+    ? {
+        ok: true,
+        provider: 'benaiah-cloud',
+        transcript
+      }
+    : null
 }
 
 function readLegacyBenaiahAccountToken(): string {
@@ -10829,6 +10876,18 @@ ipcMain.handle('hermes:benaiah-account:qr', () =>
 )
 ipcMain.handle('hermes:benaiah-account:status', (_event, profile) => benaiahAccountLinkStatus(profile))
 ipcMain.handle('hermes:benaiah-account:reopen', () => reopenBenaiahAccountLink())
+ipcMain.handle('hermes:benaiah-account:transcribe', async (_event, payload) => {
+  try {
+    return await transcribeWithBenaiah(String(payload?.dataUrl || ''), String(payload?.mimeType || 'audio/webm'))
+  } catch (error) {
+    rememberLog(
+      `[transcription] Benaiah cloud unavailable; using local fallback: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    return null
+  }
+})
 ipcMain.handle('hermes:benaiah-remote:pairing', async () => {
   try {
     return await createBenaiahRemotePairing()

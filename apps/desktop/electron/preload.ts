@@ -129,7 +129,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     start: () => ipcRenderer.invoke('hermes:benaiah-account:start'),
     startQr: () => ipcRenderer.invoke('hermes:benaiah-account:qr'),
     status: profile => ipcRenderer.invoke('hermes:benaiah-account:status', profile),
-    reopen: () => ipcRenderer.invoke('hermes:benaiah-account:reopen')
+    reopen: () => ipcRenderer.invoke('hermes:benaiah-account:reopen'),
+    transcribe: (dataUrl, mimeType) =>
+      ipcRenderer.invoke('hermes:benaiah-account:transcribe', { dataUrl, mimeType })
   },
   benaiahRemote: {
     createPairing: () => ipcRenderer.invoke('hermes:benaiah-remote:pairing')

@@ -1516,7 +1516,15 @@ export function getActionStatus(name: string, lines = 200): Promise<ActionStatus
   })
 }
 
-export function transcribeAudio(dataUrl: string, mimeType?: string): Promise<AudioTranscriptionResponse> {
+export async function transcribeAudio(dataUrl: string, mimeType?: string): Promise<AudioTranscriptionResponse> {
+  const managedTranscription = await window.hermesDesktop.benaiahAccount
+    ?.transcribe?.(dataUrl, mimeType)
+    .catch(() => null)
+
+  if (managedTranscription?.ok && managedTranscription.transcript) {
+    return managedTranscription
+  }
+
   return window.hermesDesktop.api<AudioTranscriptionResponse>({
     path: '/api/audio/transcribe',
     method: 'POST',

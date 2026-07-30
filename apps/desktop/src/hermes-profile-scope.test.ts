@@ -67,12 +67,14 @@ describe('backend action helpers are profile-scoped', () => {
   // profile's config in the settings UI but historically called the backend
   // without a profile scope, so playback used the default profile's TTS/voice
   // config instead of the active one (#53441).
-  it('forwards the active profile to audio endpoints', () => {
+  it('forwards the active profile to audio endpoints', async () => {
     setApiRequestProfile('jarvis')
 
-    void transcribeAudio('data:audio/webm;base64,AAAA', 'audio/webm')
-    void speakText('hello')
-    void getElevenLabsVoices()
+    await Promise.all([
+      transcribeAudio('data:audio/webm;base64,AAAA', 'audio/webm'),
+      speakText('hello'),
+      getElevenLabsVoices()
+    ])
 
     expect(api.mock.calls).toHaveLength(3)
 

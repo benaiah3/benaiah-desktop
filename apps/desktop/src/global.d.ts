@@ -155,6 +155,14 @@ declare global {
           pending: boolean
         }>
         reopen: () => Promise<{ opened: boolean }>
+        transcribe: (
+          dataUrl: string,
+          mimeType?: string
+        ) => Promise<{
+          ok: boolean
+          provider?: string
+          transcript: string
+        } | null>
       }
       benaiahRemote: {
         createPairing: () => Promise<{
