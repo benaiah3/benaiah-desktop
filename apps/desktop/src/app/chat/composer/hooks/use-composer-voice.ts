@@ -1,11 +1,15 @@
+import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useI18n } from '@/i18n'
 import { chatMessageText, collectUnspokenTurnSpeech } from '@/lib/chat-messages'
 import { triggerHaptic } from '@/lib/haptics'
+import { $voiceConversationStartRequest, takeVoiceConversationStart } from '@/store/composer'
 import { resetBrowseState } from '@/store/composer-input-history'
+import { $gateway } from '@/store/gateway'
 import { notifyError } from '@/store/notifications'
 import { $autoSpeakReplies, setAutoSpeakReplies } from '@/store/voice-prefs'
+import { resumeWakeAfterVoice } from '@/store/wake-word'
 
 import type { ComposerTarget } from '../focus'
 import { onComposerVoiceToggleRequest } from '../focus'
@@ -54,6 +58,9 @@ export function useComposerVoice({
   const { $messages } = useComposerScope()
   const [voiceConversationActive, setVoiceConversationActive] = useState(false)
   const lastSpokenIdRef = useRef<string | null>(null)
+  const voiceStartRequest = useStore($voiceConversationStartRequest)
+  const wakePausedRef = useRef(false)
+  const wakePauseBarrierRef = useRef<Promise<void> | null>(null)
 
   const { dictate, voiceActivityState, voiceStatus } = useVoiceRecorder({
     focusInput,
@@ -111,7 +118,34 @@ export function useComposerVoice({
     await onSubmit(text)
   }
 
+  const resumeWakeIfPaused = useCallback(() => {
+    if (!wakePausedRef.current) {
+      return
+    }
+
+    wakePausedRef.current = false
+    wakePauseBarrierRef.current = null
+    void resumeWakeAfterVoice()
+  }, [])
+
+  const pauseWakeForVoice = useCallback(() => {
+    wakePausedRef.current = true
+
+    const barrier = (async () => {
+      try {
+        await $gateway.get()?.request('wake.pause', {})
+      } catch {
+        // Older backend or an unarmed detector: nothing owns the mic.
+      }
+    })()
+
+    wakePauseBarrierRef.current = barrier
+
+    return barrier
+  }, [])
+
   const conversation = useVoiceConversation({
+    beforeMicOpen: () => wakePauseBarrierRef.current ?? undefined,
     busy,
     consumePendingResponse,
     enabled: voiceConversationActive,
@@ -133,18 +167,40 @@ export function useComposerVoice({
       setVoiceConversationActive(false)
       void conversation.end()
     } else {
-      setVoiceConversationActive(true)
+      void pauseWakeForVoice().finally(() => setVoiceConversationActive(true))
     }
-  }, [conversation, disabled, voiceConversationActive])
+  }, [conversation, disabled, pauseWakeForVoice, voiceConversationActive])
 
   useEffect(
     () => onComposerVoiceToggleRequest(toggled => toggled === target && toggleVoiceConversation()),
     [target, toggleVoiceConversation]
   )
 
+  useEffect(() => {
+    if (
+      target === 'main' &&
+      !disabled &&
+      takeVoiceConversationStart(voiceStartRequest) &&
+      !voiceConversationActive
+    ) {
+      void pauseWakeForVoice().finally(() => setVoiceConversationActive(true))
+    }
+  }, [disabled, pauseWakeForVoice, target, voiceConversationActive, voiceStartRequest])
+
+  useEffect(() => {
+    if (!voiceConversationActive) {
+      resumeWakeIfPaused()
+    }
+  }, [resumeWakeIfPaused, voiceConversationActive])
+
+  useEffect(() => resumeWakeIfPaused, [resumeWakeIfPaused])
+
   // Explicit start/end for the on-screen conversation controls (the hotkey uses
   // the gated toggle above).
-  const startConversation = useCallback(() => setVoiceConversationActive(true), [])
+  const startConversation = useCallback(
+    () => void pauseWakeForVoice().finally(() => setVoiceConversationActive(true)),
+    [pauseWakeForVoice]
+  )
 
   const endConversation = useCallback(() => {
     setVoiceConversationActive(false)

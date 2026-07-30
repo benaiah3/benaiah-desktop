@@ -30,11 +30,21 @@ import { remoteFocusStoredSessionId } from '@/lib/gateway-events'
 import { sessionMessagesSignature } from '@/lib/session-signatures'
 import { isMessagingSource } from '@/lib/session-source'
 import { latestSessionTodos } from '@/lib/todos'
+import { playWakeSound } from '@/lib/wake-sound'
 import { $billingSettingsRequest } from '@/store/billing-block'
+import { requestVoiceConversationStart } from '@/store/composer'
 import { setCronFocusJobId } from '@/store/cron'
 import { $pinnedSessionIds, pinSession, restoreWorktree, unpinSession } from '@/store/layout'
 import { $previewTarget } from '@/store/preview'
-import { $activeGatewayProfile, $freshSessionRequest, $profileScope, refreshActiveProfile } from '@/store/profile'
+import {
+  $activeGatewayProfile,
+  $freshSessionRequest,
+  $profileScope,
+  ensureGatewayProfile,
+  newSessionInProfile,
+  normalizeProfileKey,
+  refreshActiveProfile
+} from '@/store/profile'
 import { $startWorkSessionRequest, followActiveSessionCwd } from '@/store/projects'
 import {
   $activeSessionId,
@@ -55,6 +65,7 @@ import {
   setMessages
 } from '@/store/session'
 import { clearSessionTodos, setSessionTodos, todosForHydration } from '@/store/todos'
+import { armWakeWord } from '@/store/wake-word'
 import { isSecondaryWindow } from '@/store/windows'
 import { useSkinCommand } from '@/themes/use-skin-command'
 
@@ -663,6 +674,29 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   const handleGatewayEventWithPlugins = useCallback(
     (event: Parameters<typeof handleDesktopGatewayEvent>[0]) => {
       emitGatewayEvent(event)
+
+      if (event.type === 'wake.detected') {
+        const payload = event.payload as { profile?: null | string; start_new_session?: boolean } | undefined
+        const targetProfile = payload?.profile?.trim()
+        const activeProfile = normalizeProfileKey($activeGatewayProfile.get())
+
+        playWakeSound()
+
+        if (targetProfile && normalizeProfileKey(targetProfile) !== activeProfile) {
+          if (payload?.start_new_session !== false) {
+            newSessionInProfile(targetProfile)
+          } else {
+            void ensureGatewayProfile(normalizeProfileKey(targetProfile))
+          }
+        } else if (payload?.start_new_session !== false) {
+          startFreshSessionDraft()
+        }
+
+        requestVoiceConversationStart()
+
+        return
+      }
+
       const remoteStoredSessionId = remoteFocusStoredSessionId(event)
 
       if (remoteStoredSessionId) {
@@ -675,7 +709,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
       handleDesktopGatewayEvent(event)
     },
-    [handleDesktopGatewayEvent, resumeSession]
+    [handleDesktopGatewayEvent, resumeSession, startFreshSessionDraft]
   )
 
   useGatewayBoot({
@@ -695,6 +729,12 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     refreshHermesConfig,
     refreshSessions
   })
+
+  useEffect(() => {
+    if (gatewayState === 'open') {
+      void armWakeWord(requestGateway)
+    }
+  }, [gatewayState, requestGateway])
 
   // Only the open messaging transcript needs its own poll — local chats are
   // live over the websocket already.

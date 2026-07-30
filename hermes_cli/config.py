@@ -944,6 +944,29 @@ DEFAULT_CONFIG = {
     # sessions (no live client) so accumulated agents don't pile up under memory
     # pressure. Reopening one re-resumes it from disk. 0/null disables.
     "max_live_sessions": 16,
+    # Local, opt-in wake phrase for the Benaiah desktop app. Audio remains on
+    # the Mac and sherpa supports the branded phrase without a trained model.
+    "wake_word": {
+        "enabled": False,
+        "surface": "gui",
+        "input_device": None,
+        "provider": "sherpa",
+        "phrase": "hey benaiah",
+        "sensitivity": 0.6,
+        "confirmation_frames": 3,
+        "start_new_session": True,
+        "profile_routing": False,
+        "openwakeword": {
+            "model": "hey_hermes",
+            "inference_framework": "",
+        },
+        "sherpa": {
+            "model_dir": "",
+        },
+        "porcupine": {
+            "keyword": "jarvis",
+        },
+    },
     "agent": {
         "max_turns": 500,
         # Inactivity timeout for gateway agent execution (seconds).
@@ -3820,7 +3843,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 33,
+    "_config_version": 34,
 }
 
 # =============================================================================

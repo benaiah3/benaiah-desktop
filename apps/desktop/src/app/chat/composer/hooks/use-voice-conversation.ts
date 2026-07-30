@@ -23,6 +23,7 @@ interface PendingVoiceResponse {
 }
 
 interface VoiceConversationOptions {
+  beforeMicOpen?: () => Promise<void> | void
   busy: boolean
   enabled: boolean
   onFatalError?: () => void
@@ -33,6 +34,7 @@ interface VoiceConversationOptions {
 }
 
 export function useVoiceConversation({
+  beforeMicOpen,
   busy,
   enabled,
   onFatalError,
@@ -170,6 +172,7 @@ export function useVoiceConversation({
     }
 
     try {
+      await beforeMicOpen?.()
       // VAD tuning mirrors `tools.voice_mode` defaults so the browser loop matches the CLI.
       await handle.start({
         silenceLevel: 0.075,
@@ -190,7 +193,7 @@ export function useVoiceConversation({
       setStatus('idle')
       onFatalError?.()
     }
-  }, [handle, handleTurn, onFatalError, voiceCopy.couldNotStartSession, voiceCopy.microphoneFailed])
+  }, [beforeMicOpen, handle, handleTurn, onFatalError, voiceCopy.couldNotStartSession, voiceCopy.microphoneFailed])
 
   const settleAfterSpeech = useCallback(
     (barged: boolean) => {

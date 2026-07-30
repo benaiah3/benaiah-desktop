@@ -2134,6 +2134,9 @@ export const zh: Translations = {
       '调整或继续'
     ],
     startVoice: '开始语音对话',
+    wakeWordListening: phrase => `正在等待“${phrase}”`,
+    wakeWordOff: phrase => `开启“${phrase}”`,
+    wakeWordPausedVoice: phrase => `语音对话期间“${phrase}”会暂停`,
     queueMessage: '排队消息',
     steer: '引导当前运行',
     stop: '停止',

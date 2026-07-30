@@ -1941,6 +1941,9 @@ export const en: Translations = {
       'Adjust or continue'
     ],
     startVoice: 'Start voice conversation',
+    wakeWordListening: phrase => `Listening for “${phrase}”`,
+    wakeWordOff: phrase => `Turn on “${phrase}”`,
+    wakeWordPausedVoice: phrase => `“${phrase}” pauses during voice conversations`,
     queueMessage: 'Queue message',
     steer: 'Steer the current run',
     stop: 'Stop',

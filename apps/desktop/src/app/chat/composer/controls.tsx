@@ -1,10 +1,24 @@
+import { useStore } from '@nanostores/react'
+
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { AudioLines, iconSize, Layers3, Loader2, Square, SteeringWheel, Volume2, VolumeX } from '@/lib/icons'
+import {
+  AudioLines,
+  Ear,
+  EarOff,
+  iconSize,
+  Layers3,
+  Loader2,
+  Square,
+  SteeringWheel,
+  Volume2,
+  VolumeX
+} from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import { $wakeWord, toggleWakeWord } from '@/store/wake-word'
 
 import type { ConversationStatus } from './hooks/use-voice-conversation'
 import { ModelPill } from './model-pill'
@@ -80,6 +94,7 @@ export function ComposerControls({
       <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
       <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
       <AutoSpeakButton active={autoSpeak} disabled={disabled} onToggle={onToggleAutoSpeak} />
+      <WakeWordButton disabled={disabled} />
       {busyAction === 'steer' ? (
         <Tip label={<TipKeybindLabel actionId="composer.queue" text={c.queueMessage} />}>
           <Button
@@ -181,6 +196,7 @@ function ConversationPill({
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
+      <WakeWordButton disabled={disabled} pausedForVoice />
       <Tip label={muted ? c.unmuteMic : c.muteMic}>
         <Button
           aria-label={muted ? c.unmuteMic : c.muteMic}
@@ -289,6 +305,47 @@ function AutoSpeakButton({ active, disabled, onToggle }: { active: boolean; disa
         variant="ghost"
       >
         {active ? <Volume2 className={iconSize.sm} /> : <VolumeX className={iconSize.sm} />}
+      </Button>
+    </Tip>
+  )
+}
+
+// Local, opt-in “Hey Benaiah” wake control. The backend owns the microphone
+// lease and reports whether this desktop is actually armed.
+function WakeWordButton({ disabled, pausedForVoice = false }: { disabled: boolean; pausedForVoice?: boolean }) {
+  const { t } = useI18n()
+  const c = t.composer
+  const wake = useStore($wakeWord)
+  const phrase = wake.phrase || 'hey benaiah'
+
+  const label = pausedForVoice
+    ? c.wakeWordPausedVoice(phrase)
+    : wake.listening
+      ? c.wakeWordListening(phrase)
+      : c.wakeWordOff(phrase)
+
+  const tooltip = !pausedForVoice && wake.notice ? `${label} — ${wake.notice}` : label
+
+  return (
+    <Tip label={tooltip}>
+      <Button
+        aria-label={label}
+        aria-pressed={wake.listening && !pausedForVoice}
+        className={cn(
+          GHOST_ICON_BTN,
+          'p-0',
+          wake.listening && !pausedForVoice && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'
+        )}
+        disabled={disabled || pausedForVoice || wake.pending}
+        onClick={() => {
+          triggerHaptic(wake.listening ? 'close' : 'open')
+          void toggleWakeWord()
+        }}
+        size="icon"
+        type="button"
+        variant="ghost"
+      >
+        {wake.listening && !pausedForVoice ? <Ear className={iconSize.sm} /> : <EarOff className={iconSize.sm} />}
       </Button>
     </Tip>
   )

@@ -140,6 +140,29 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     # small silk-v3 codec binding; installed on first .silk transcription.
     "stt.silk": ("pilk==0.2.4",),
 
+    # ─── Wake word ("Hey Benaiah") engines ─────────────────────────────────
+    # Benaiah uses sherpa's open-vocabulary local detector so the branded
+    # phrase works without training or sending ambient microphone audio away
+    # from the Mac. The other engines remain available for advanced profiles.
+    "wake.openwakeword.tflite": ("ai-edge-litert==2.1.6",),
+    "wake.openwakeword": (
+        "openwakeword==0.6.0",
+        "onnxruntime==1.27.0",
+        "sounddevice==0.5.5",
+        "numpy==2.4.3",
+    ),
+    "wake.sherpa": (
+        "sherpa-onnx==1.13.4",
+        "sentencepiece==0.2.2",
+        "sounddevice==0.5.5",
+        "numpy==2.4.3",
+    ),
+    "wake.porcupine": (
+        "pvporcupine==4.0.3",
+        "sounddevice==0.5.5",
+        "numpy==2.4.3",
+    ),
+
     # ─── Image generation backends ─────────────────────────────────────────
     "image.fal": ("fal-client==0.13.1",),
 

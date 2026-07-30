@@ -1744,6 +1744,9 @@ export const zhHant = defineLocale({
       '調整或繼續'
     ],
     startVoice: '開始語音對話',
+    wakeWordListening: phrase => `正在等待「${phrase}」`,
+    wakeWordOff: phrase => `開啟「${phrase}」`,
+    wakeWordPausedVoice: phrase => `語音對話期間「${phrase}」會暫停`,
     queueMessage: '排隊訊息',
     stop: '停止',
     send: '傳送',
