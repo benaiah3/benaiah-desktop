@@ -79,3 +79,29 @@ def test_unread_streaming_response_does_not_crash_and_falls_back_to_exception_me
     assert "HTTP 429" in summary
     assert "Gemini HTTP 429: quota exceeded" in summary
 
+
+def test_benaiah_allowance_is_product_copy_with_a_short_checkout_link():
+    err = Exception("allowance exhausted")
+    err.status_code = 409
+    err.body = {
+        "error": {
+            "message": (
+                "Your weekly Benaiah allowance has been used.\n\n"
+                "Your work is saved, and your allowance resets Monday. "
+                "Upgrade from £6.99/month."
+            ),
+            "type": "benaiah_allowance_exhausted",
+            "code": "benaiah_allowance_exhausted",
+        },
+        "upgrade_url": (
+            "https://benaiah.ai/api/billing/go"
+            "?code=signed-device-handoff"
+        ),
+    }
+
+    summary = AIAgent._summarize_api_error(err)
+
+    assert "HTTP 409" not in summary
+    assert "Your weekly Benaiah allowance has been used." in summary
+    assert "[Continue to checkout]" in summary
+    assert "Upgrade from £6.99/month: https://" not in summary

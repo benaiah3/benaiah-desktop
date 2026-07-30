@@ -2418,7 +2418,30 @@ class AIAgent:
         # JSON body errors from OpenAI/Anthropic SDKs
         body = getattr(error, "body", None)
         if isinstance(body, dict):
-            msg = body.get("error", {}).get("message") if isinstance(body.get("error"), dict) else body.get("message")
+            error_body = body.get("error") if isinstance(body.get("error"), dict) else body
+            if error_body.get("code") == "benaiah_allowance_exhausted":
+                message = AIAgent._coerce_api_error_detail(error_body.get("message"))
+                message = re.sub(r"^\s*HTTP\s+409:\s*", "", message, flags=re.IGNORECASE)
+                message = re.sub(
+                    r"\s*Upgrade from £6\.99/month:\s*https?://\S+\s*$",
+                    "\n\nYour work is saved, and your allowance resets Monday. Upgrade from £6.99/month.",
+                    message,
+                    flags=re.IGNORECASE,
+                )
+                upgrade_url = str(body.get("upgrade_url") or "").strip()
+                if not upgrade_url:
+                    raw_match = re.search(
+                        r"https://benaiah\.ai/api/billing/go\?code=[^\s)]+",
+                        AIAgent._coerce_api_error_detail(error_body.get("message")),
+                    )
+                    upgrade_url = raw_match.group(0) if raw_match else ""
+                if re.fullmatch(
+                    r"https://benaiah\.ai/api/billing/go(?:\?code=[A-Za-z0-9._~%+-]+)?",
+                    upgrade_url,
+                ):
+                    message = f"{message.rstrip()}\n\n[Continue to checkout]({upgrade_url})"
+                return message
+            msg = error_body.get("message")
             if msg:
                 status_code = getattr(error, "status_code", None)
                 prefix = f"HTTP {status_code}: " if status_code else ""

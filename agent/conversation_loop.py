@@ -4890,9 +4890,6 @@ def run_conversation(
                         agent._dump_api_request_debug(
                             api_kwargs, reason="non_retryable_client_error", error=api_error,
                         )
-                    # Terminal — flush buffered context so the user sees
-                    # what was tried before the abort.
-                    agent._flush_status_buffer()
                     # Summarize once: Cloudflare/proxy HTML challenge pages and
                     # other raw provider bodies must be collapsed to a short
                     # one-liner here, otherwise the full page leaks into the
@@ -4900,6 +4897,36 @@ def run_conversation(
                     # it verbatim (e.g. a cron failure notification dumped a
                     # ~60KB Cloudflare challenge page as 31 Discord messages).
                     _nonretryable_summary = agent._summarize_api_error(api_error)
+                    _error_body = getattr(api_error, "body", None)
+                    _error_payload = (
+                        _error_body.get("error")
+                        if isinstance(_error_body, dict)
+                        and isinstance(_error_body.get("error"), dict)
+                        else _error_body
+                    )
+                    _benaiah_allowance_exhausted = (
+                        isinstance(_error_payload, dict)
+                        and _error_payload.get("code") == "benaiah_allowance_exhausted"
+                    )
+                    if _benaiah_allowance_exhausted:
+                        # This is a normal product boundary, not an internal
+                        # transport failure. Keep the conversation, suppress
+                        # retry/debug chatter, and surface only the friendly
+                        # allowance copy plus its one-tap checkout action.
+                        agent._clear_status_buffer()
+                        agent._persist_session(messages, conversation_history)
+                        return {
+                            "final_response": _nonretryable_summary,
+                            "messages": messages,
+                            "api_calls": api_call_count,
+                            "completed": False,
+                            "failed": True,
+                            "error": _nonretryable_summary,
+                            "failure_reason": "allowance_exhausted",
+                        }
+                    # Terminal — flush buffered context so the user sees what
+                    # was tried before an actual provider/runtime abort.
+                    agent._flush_status_buffer()
                     if classified.reason == FailoverReason.content_policy_blocked:
                         agent._emit_status(
                             f"❌ Provider safety filter blocked this request: "
