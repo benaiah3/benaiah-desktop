@@ -8,6 +8,12 @@ export interface ReleaseUpdaterLike {
   autoRunAppAfterInstall: boolean
   disableWebInstaller: boolean
   fullChangelog: boolean
+  setFeedURL(options: {
+    owner: string
+    provider: 'github'
+    releaseType: 'release'
+    repo: string
+  }): void
   checkForUpdates(): Promise<UpdateCheckResult | null>
   downloadUpdate(): Promise<string[]>
   on(event: 'download-progress', listener: (progress: ProgressInfo) => void): this
@@ -77,6 +83,15 @@ export function createReleaseUpdaterController({
   log,
   updater
 }: ReleaseUpdaterControllerOptions) {
+  // Set the reviewed Benaiah release feed in code as well as packaging it in
+  // app-update.yml. This keeps update discovery self-healing if an internally
+  // staged app bundle is installed without electron-builder's generated file.
+  updater.setFeedURL({
+    owner: 'benaiah3',
+    provider: 'github',
+    releaseType: 'release',
+    repo: 'benaiah-desktop'
+  })
   updater.autoDownload = false
   updater.autoInstallOnAppQuit = true
   updater.autoRunAppAfterInstall = true

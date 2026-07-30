@@ -12,6 +12,7 @@ class FakeUpdater extends EventEmitter implements ReleaseUpdaterLike {
   autoRunAppAfterInstall = false
   disableWebInstaller = false
   fullChangelog = true
+  setFeedURL = vi.fn()
   checkForUpdates = vi.fn()
   downloadUpdate = vi.fn()
   quitAndInstall = vi.fn()
@@ -67,6 +68,12 @@ describe('release updater', () => {
     expect(updater.autoDownload).toBe(false)
     expect(updater.allowPrerelease).toBe(false)
     expect(updater.disableWebInstaller).toBe(true)
+    expect(updater.setFeedURL).toHaveBeenCalledWith({
+      owner: 'benaiah3',
+      provider: 'github',
+      releaseType: 'release',
+      repo: 'benaiah-desktop'
+    })
 
     await expect(controller.check()).resolves.toMatchObject({
       latestVersion: '0.21.0',
