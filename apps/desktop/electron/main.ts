@@ -33,7 +33,6 @@ import { autoUpdater as signedReleaseUpdater } from 'electron-updater'
 import nodePty from 'node-pty'
 
 import { classifyActiveRuntime } from './active-runtime-state'
-import { prepareBenaiahAccountLink } from './benaiah-account-link'
 import { stopBackendChild as stopBackendChildImpl } from './backend-child'
 import { dashboardFallbackArgs, sourceDeclaresServe } from './backend-command'
 import { createBackendConnectionState } from './backend-connection-state'
@@ -42,6 +41,7 @@ import { isReauthRequiredError, waitForHermesReady } from './backend-health'
 import { canImportHermesCli, shouldTrustHermesOverride, verifyHermesCli } from './backend-probes'
 import { waitForDashboardPortAnnouncement } from './backend-ready'
 import { shouldLatchBackendStartFailure, shouldLatchRemoteReauthFailure } from './backend-start-failure'
+import { prepareBenaiahAccountLink } from './benaiah-account-link'
 import { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } from './bootstrap-platform'
 import { runBootstrap } from './bootstrap-runner'
 import { applyConnectionChange, resolveTerminalConnection } from './connection-apply'
@@ -129,6 +129,7 @@ import {
 } from './hardening'
 import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle } from './link-title-window'
 import { ensureMainWindow } from './main-window-lifecycle'
+import { synchronizeManagedRuntime } from './managed-runtime-sync'
 import {
   oauthGuardMayHardFail,
   oauthSessionIsLive,
@@ -3839,6 +3840,24 @@ function resolveHermesBackend(backendArgs) {
   //    builds could leave a healthy install behind without the marker. If the
   //    active runtime is usable, launch it directly; only fall through to
   //    bootstrap when the runtime itself is unusable.
+  if (IS_PACKAGED && INSTALL_STAMP?.commit && isHermesSourceRoot(ACTIVE_HERMES_ROOT)) {
+    const sync = synchronizeManagedRuntime(ACTIVE_HERMES_ROOT, INSTALL_STAMP.commit)
+
+    if (sync.state === 'updated') {
+      rememberLog(
+        `[runtime-sync] advanced managed Benaiah engine ${sync.from.slice(0, 12)} -> ${sync.to.slice(0, 12)}`
+      )
+      writeBootstrapMarker({
+        pinnedCommit: sync.to,
+        pinnedBranch: INSTALL_STAMP.branch
+      })
+    } else if (sync.state === 'failed') {
+      rememberLog(`[runtime-sync] managed engine update failed: ${sync.reason}`)
+    } else if (sync.state === 'skipped' && sync.reason !== 'missing') {
+      rememberLog(`[runtime-sync] managed engine update skipped: ${sync.reason}`)
+    }
+  }
+
   const activeRuntime = activeRuntimeState()
 
   if (activeRuntime.shouldUseActiveRuntime && !bootstrapRepairRequested) {
