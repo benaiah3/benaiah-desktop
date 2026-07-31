@@ -23,7 +23,8 @@ import tools.wake_word as ww
 
 
 def test_config_defaults_and_clamping():
-    assert ww._provider({}) == "openwakeword"
+    # Benaiah white-label defaults to STT phrase spotting ("hey benaiah").
+    assert ww._provider({}) == "stt"
     assert ww._provider({"provider": "Porcupine"}) == "porcupine"
     assert ww._input_device({}) is None
     assert ww._input_device({"input_device": 7}) == 7
@@ -36,7 +37,7 @@ def test_config_defaults_and_clamping():
     assert ww._sensitivity({"sensitivity": "nope"}) == ww._DEFAULTS["sensitivity"]
     assert ww._sensitivity({}) == ww._DEFAULTS["sensitivity"]
     assert ww.wake_phrase({"phrase": "hey hermes"}) == "hey hermes"
-    assert ww.wake_phrase({}) == "hey hermes"
+    assert ww.wake_phrase({}) == "hey benaiah"
 
 
 def test_wake_surface_enabled_gate():
@@ -65,7 +66,8 @@ def test_load_wake_word_config_is_a_dict_with_defaults():
     cfg = ww.load_wake_word_config()
     assert isinstance(cfg, dict)
     assert cfg.get("enabled") is False
-    assert cfg.get("provider") == "openwakeword"
+    assert cfg.get("provider") == "stt"
+    assert cfg.get("phrase") == "hey benaiah"
 
 
 def test_load_wake_word_config_guards_non_dict(monkeypatch):
@@ -210,6 +212,9 @@ def _install_fake_openwakeword(monkeypatch):
     monkeypatch.setitem(sys.modules, "openwakeword", oww)
     monkeypatch.setitem(sys.modules, "openwakeword.model", model_mod)
     monkeypatch.setattr("tools.lazy_deps.ensure", lambda *a, **k: None)
+    # macOS ARM64 refuses to start without a tflite runtime; unit tests do not
+    # install ai-edge-litert, so treat the runtime as present for the fake.
+    monkeypatch.setattr(ww, "ensure_tflite_runtime", lambda: True)
     return calls
 
 
