@@ -24,6 +24,9 @@ def test_benaiah_defaults_use_stt_phrase_spotting(monkeypatch):
     assert wake.wake_phrase(config) == "hey benaiah"
     assert config["start_new_session"] is True
     assert wake._phrase_matched("Hey, Benaya.", "hey benaiah")
+    assert wake._phrase_matched("Hey, Beniah.", "hey benaiah")
+    assert wake._phrase_matched("Hey, Bonita.", "hey benaiah")
+    assert wake._phrase_matched("hey benita", "hey benaiah")
     assert wake._phrase_matched("hey benaiah open gmail", "hey benaiah")
     assert not wake._phrase_matched("play some music", "hey benaiah")
     assert (Path(__file__).resolve().parents[2] / "tools" / "wakewords" / "hey_hermes.tflite").is_file()

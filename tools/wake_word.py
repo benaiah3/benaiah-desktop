@@ -92,13 +92,19 @@ _DEFAULTS: Dict[str, Any] = {
 _PHRASE_ALIASES = {
     "hey benaiah": (
         "hey benaiah",
-        "hey benaya",
+        "hey beniah",
         "hey benaya",
         "hey banaya",
         "hey bernaya",
+        "hey benita",
+        "hey bonita",
+        "hey banita",
+        "hey benea",
+        "hey bania",
+        "hey benia",
         "a benaya",
+        "a benaiah",
         "hey ben i a",
-        "hey benaya",
     ),
 }
 
@@ -828,11 +834,24 @@ class _SttPhraseEngine(_Engine):
 
             result = transcribe_audio(wav_path)
             transcript = str((result or {}).get("transcript") or "")
-            if result and result.get("success") and _phrase_matched(transcript, self._phrase):
+            if not result or not result.get("success"):
+                logger.warning(
+                    "wake word: STT probe failed (%s): %s",
+                    (result or {}).get("provider") or "unknown",
+                    (result or {}).get("error") or "no result",
+                )
+                return False
+            if _phrase_matched(transcript, self._phrase):
                 logger.info("wake word: STT matched %r via %r", self._phrase, transcript)
                 return True
+            if transcript.strip():
+                logger.info(
+                    "wake word: STT heard %r (no match for %r)",
+                    transcript,
+                    self._phrase,
+                )
         except Exception as exc:
-            logger.debug("wake word: STT probe failed: %s", exc)
+            logger.warning("wake word: STT probe failed: %s", exc)
         finally:
             if wav_path:
                 try:
