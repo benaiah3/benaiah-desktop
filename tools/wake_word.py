@@ -6,19 +6,19 @@ desktop GUI (one of them owns it, gated by ``wake_surface_enabled``): say the
 wake word, Benaiah opens a fresh session and captures voice via the existing
 pipeline, then answers.
 
-Three engines, all fully on-device (no audio leaves the machine for detection):
+Engines (detection stays on-device for openwakeword/sherpa/porcupine; the STT
+engine uses the already-configured local speech-to-text path):
 
-* **openwakeword** (default, free, no API key) — loads an ONNX model. Defaults
-  to the bundled "hey hermes" model (``tools/wakewords/``) so the wake word
-  works out of the box; or point ``wake_word.openwakeword.model`` at a built-in
-  name (``hey_jarvis``, ``alexa``, …) or a custom ``.onnx`` for another phrase.
-* **sherpa** (free, no API key, open vocabulary) — sherpa-onnx keyword
-  spotting. Detects ANY typed phrase with no training: set
-  ``wake_word.phrase`` and the phrase is tokenized at runtime against a small
-  streaming zipformer model (~13 MB English model, one-time download).
-* **porcupine** (premium) — Picovoice's engine. Needs ``PORCUPINE_ACCESS_KEY``;
-  supports built-in keywords and custom ``.ppn`` files from the Picovoice
-  Console.
+* **stt** (Benaiah default) — energy-gated rolling buffer transcribed by the
+  configured local STT provider. Matches the branded phrase ``hey benaiah``
+  without a separately trained hotword model.
+* **openwakeword** — loads an ONNX/TFLite model. Ships the upstream
+  ``hey_hermes`` classifier under ``tools/wakewords/`` (useful while a dedicated
+  ``hey_benaiah`` model is trained); or point ``wake_word.openwakeword.model``
+  at a built-in name / custom path.
+* **sherpa** — open-vocabulary sherpa-onnx keyword spotting for arbitrary
+  typed phrases (best-effort; uncommon names can be unreliable).
+* **porcupine** — Picovoice. Needs ``PORCUPINE_ACCESS_KEY``.
 
 Audio capture reuses the same 16 kHz mono int16 ``sounddevice`` path as voice
 mode. The detector runs on its own daemon thread; callers ``pause()`` it while a
@@ -33,9 +33,12 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
+import tempfile
 import threading
 import time
+import wave
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -76,14 +79,27 @@ _DEFAULTS: Dict[str, Any] = {
     "enabled": False,
     "surface": "gui",
     "input_device": None,
-    # openWakeWord + the bundled trained model is the reliable on-device path.
-    # Sherpa open-vocab remains available for custom phrases, but the branded
-    # "hey benaiah" ear uses the trained classifier (see tools/wakewords/).
-    "provider": "openwakeword",
+    # Local STT phrase spotting — reliable for the branded "hey benaiah" without
+    # a separately trained openWakeWord model. openwakeword/sherpa remain available.
+    "provider": "stt",
     "phrase": "hey benaiah",
     "sensitivity": 0.5,
     "confirmation_frames": _DEFAULT_CONFIRMATION_FRAMES,
     "start_new_session": True,
+}
+
+# STT often mangles the uncommon name; accept close forms.
+_PHRASE_ALIASES = {
+    "hey benaiah": (
+        "hey benaiah",
+        "hey benaya",
+        "hey benaya",
+        "hey banaya",
+        "hey bernaya",
+        "a benaya",
+        "hey ben i a",
+        "hey benaya",
+    ),
 }
 
 # Bundled "hey hermes" model (tools/wakewords/) — the default, so the wake word
@@ -203,7 +219,7 @@ def _get(cfg: Dict[str, Any], key: str) -> Any:
 
 
 def _provider(cfg: Dict[str, Any]) -> str:
-    return str(_get(cfg, "provider")).strip().lower() or "openwakeword"
+    return str(_get(cfg, "provider")).strip().lower() or "stt"
 
 
 def _input_device(cfg: Dict[str, Any]) -> int | str | None:
@@ -721,12 +737,127 @@ class _PorcupineEngine(_Engine):
             pass
 
 
+def _normalize_phrase_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+
+def _phrase_matched(transcript: str, phrase: str) -> bool:
+    """True when STT text contains the wake phrase or a known mangling."""
+    text = _normalize_phrase_text(transcript)
+    target = _normalize_phrase_text(phrase)
+    if not text or not target:
+        return False
+    compact = text.replace(" ", "")
+    if target in text or target.replace(" ", "") in compact:
+        return True
+    for alias in _PHRASE_ALIASES.get(target, ()):
+        alias_n = _normalize_phrase_text(alias)
+        if alias_n and (alias_n in text or alias_n.replace(" ", "") in compact):
+            return True
+    # Token-order fallback: every phrase token appears in order.
+    tokens = target.split()
+    cursor = 0
+    for token in tokens:
+        at = text.find(token, cursor)
+        if at < 0:
+            return False
+        cursor = at + len(token)
+    return bool(tokens)
+
+
+class _SttPhraseEngine(_Engine):
+    """Energy-gated STT phrase spotter for branded wake words.
+
+    Uses the user's configured local STT path (already required for voice) on a
+    short rolling buffer. Heavier than openWakeWord, but works for "hey benaiah"
+    without a separately trained hotword classifier.
+    """
+
+    frame_length = 1600  # 100 ms @ 16 kHz
+
+    def __init__(self, cfg: Dict[str, Any]):
+        if not _stt_ready():
+            raise RuntimeError(
+                "Wake word provider 'stt' needs speech-to-text configured "
+                "(config.yaml stt.provider, usually local)."
+            )
+        self._phrase = wake_phrase(cfg)
+        # Map shared sensitivity (higher=stricter) onto an int16 peak gate for
+        # the rolling window (not a single frame). 0.5 → ~380.
+        self._energy = int(60 + 640 * _sensitivity(cfg))
+        self._window_seconds = 2.4
+        self._min_interval = 1.1
+        self._max_samples = int(self._window_seconds * SAMPLE_RATE)
+        self._buffer = bytearray()
+        self._last_probe = 0.0
+        self._lock = threading.Lock()
+
+    def process(self, frame) -> bool:
+        import numpy as np
+
+        samples = np.asarray(frame, dtype=np.int16).reshape(-1)
+        if samples.size == 0:
+            return False
+        with self._lock:
+            self._buffer.extend(samples.tobytes())
+            overflow = len(self._buffer) - (self._max_samples * 2)
+            if overflow > 0:
+                del self._buffer[:overflow]
+            now = time.monotonic()
+            if now - self._last_probe < self._min_interval:
+                return False
+            if len(self._buffer) < int(1.2 * SAMPLE_RATE) * 2:
+                return False
+            window = np.frombuffer(bytes(self._buffer), dtype=np.int16)
+            peak = int(np.max(np.abs(window))) if window.size else 0
+            if peak < self._energy:
+                return False
+            self._last_probe = now
+            audio = bytes(self._buffer)
+
+        wav_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+                wav_path = handle.name
+            with wave.open(wav_path, "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(SAMPLE_RATE)
+                wav.writeframes(audio)
+            from tools.transcription_tools import transcribe_audio
+
+            result = transcribe_audio(wav_path)
+            transcript = str((result or {}).get("transcript") or "")
+            if result and result.get("success") and _phrase_matched(transcript, self._phrase):
+                logger.info("wake word: STT matched %r via %r", self._phrase, transcript)
+                return True
+        except Exception as exc:
+            logger.debug("wake word: STT probe failed: %s", exc)
+        finally:
+            if wav_path:
+                try:
+                    os.unlink(wav_path)
+                except OSError:
+                    pass
+        return False
+
+    def reset(self) -> None:
+        with self._lock:
+            self._buffer.clear()
+            self._last_probe = 0.0
+
+    def close(self) -> None:
+        self.reset()
+
+
 def _build_engine(cfg: Dict[str, Any]) -> _Engine:
     provider = _provider(cfg)
     if provider == "porcupine":
         return _PorcupineEngine(cfg)
     if provider in ("sherpa", "sherpa-onnx", "kws", "open"):
         return _SherpaKwsEngine(cfg)
+    if provider in ("stt", "speech", "transcript", "whisper"):
+        return _SttPhraseEngine(cfg)
     if provider in ("openwakeword", "oww", "local"):
         return _OpenWakeWordEngine(cfg)
     raise ValueError(f"Unknown wake_word provider: {provider!r}")
@@ -806,9 +937,11 @@ def check_wake_word_requirements(cfg: Optional[Dict[str, Any]] = None) -> Dict[s
         feature = "wake.porcupine"
     elif provider in ("sherpa", "sherpa-onnx", "kws", "open"):
         feature = "wake.sherpa"
+    elif provider in ("stt", "speech", "transcript", "whisper"):
+        feature = ""
     else:
         feature = "wake.openwakeword"
-    deps_ok = lazy_deps.is_available(feature)
+    deps_ok = True if not feature else lazy_deps.is_available(feature)
     lazy_ok = lazy_deps._allow_lazy_installs()
     # The audio probe imports sounddevice + numpy — two of the very packages
     # the lazy installer would fetch — so it can only be trusted once the
@@ -817,7 +950,8 @@ def check_wake_word_requirements(cfg: Optional[Dict[str, Any]] = None) -> Dict[s
     # ``lazy_deps.ensure()`` and the stream-open surfaces any real audio
     # problem. Gating ``available`` on the probe here made the lazy-install
     # path unreachable (the probe always failed before ensure() could run).
-    audio_ok = _audio_available() if deps_ok else False
+    # STT wake only needs a working mic + configured STT (no wake.* extra).
+    audio_ok = _audio_available() if (deps_ok or not feature) else False
     key_ok = True
     # The full wake loop is wake → record → STT → agent → TTS. Arming without
     # either end configured gives a mic that hears you and then does nothing
@@ -829,7 +963,7 @@ def check_wake_word_requirements(cfg: Optional[Dict[str, Any]] = None) -> Dict[s
     # The tflite backend needs a runtime openWakeWord doesn't declare off Linux.
     # Report it as a real remediation instead of arming a detector that can't fire.
     tflite_ok = True
-    if provider not in ("porcupine", "sherpa", "sherpa-onnx", "kws", "open"):
+    if provider in ("openwakeword", "oww", "local"):
         framework = resolve_inference_framework(cfg)
         if framework == "tflite":
             tflite_ok = ensure_tflite_runtime() or lazy_deps.is_available("wake.openwakeword.tflite") or lazy_ok
@@ -837,11 +971,14 @@ def check_wake_word_requirements(cfg: Optional[Dict[str, Any]] = None) -> Dict[s
     if provider == "porcupine" and not (os.getenv("PORCUPINE_ACCESS_KEY") or "").strip():
         key_ok = False
         hint = "Set PORCUPINE_ACCESS_KEY (free key at https://console.picovoice.ai)."
-    elif not deps_ok and not lazy_ok:
+    elif feature and not deps_ok and not lazy_ok:
         hint = lazy_deps.feature_install_command(feature) or ""
     elif not tflite_ok:
         hint = "The wake word needs the tflite runtime on this Mac: pip install ai-edge-litert"
-    elif deps_ok and not audio_ok:
+    elif (deps_ok or not feature) and not audio_ok and feature:
+        hint = "Microphone capture needs sounddevice + numpy and a working audio device."
+    elif not audio_ok and not feature:
+        # STT provider: still need mic capture packages for the always-on stream.
         hint = "Microphone capture needs sounddevice + numpy and a working audio device."
     elif not stt_ok or not tts_ok:
         missing = " and ".join(
@@ -850,9 +987,9 @@ def check_wake_word_requirements(cfg: Optional[Dict[str, Any]] = None) -> Dict[s
         hint = (f"Wake word needs {missing} configured — run `hermes tools` "
                 f"(Voice section) or see the voice-mode docs.")
 
+    wake_deps_ready = (deps_ok and audio_ok) or (not deps_ok and lazy_ok) if feature else (audio_ok or lazy_ok)
     return {
-        "available": key_ok and stt_ok and tts_ok and tflite_ok
-        and ((deps_ok and audio_ok) or (not deps_ok and lazy_ok)),
+        "available": key_ok and stt_ok and tts_ok and tflite_ok and wake_deps_ready,
         "provider": provider,
         "deps_available": deps_ok,
         "audio_available": audio_ok,

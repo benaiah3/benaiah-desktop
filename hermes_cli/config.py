@@ -944,14 +944,14 @@ DEFAULT_CONFIG = {
     # sessions (no live client) so accumulated agents don't pile up under memory
     # pressure. Reopening one re-resumes it from disk. 0/null disables.
     "max_live_sessions": 16,
-    # Local, opt-in wake phrase for the Benaiah desktop app. Audio stays on the
-    # Mac. openWakeWord + the bundled trained model is the reliable path; the
-    # UI phrase remains "hey benaiah".
+    # Local, opt-in wake phrase for the Benaiah desktop app. Default STT spotting
+    # matches the branded "hey benaiah" via the configured local speech-to-text
+    # path; openWakeWord remains available once a dedicated model is trained.
     "wake_word": {
         "enabled": False,
         "surface": "gui",
         "input_device": None,
-        "provider": "openwakeword",
+        "provider": "stt",
         "phrase": "hey benaiah",
         "sensitivity": 0.5,
         "confirmation_frames": 3,
