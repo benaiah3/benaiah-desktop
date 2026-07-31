@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n'
 import { monitorSpeechDuringPlayback } from '@/lib/voice-barge-in'
 import {
+  consumeUserStopRequested,
   markVoicePlaybackInterrupted,
   playSpeechText,
   type SpeechStreamSession,
@@ -10,7 +11,6 @@ import {
   stopVoicePlayback
 } from '@/lib/voice-playback'
 import { notify, notifyError } from '@/store/notifications'
-import { $voicePlayback } from '@/store/voice-playback'
 
 import { useMicRecorder } from './use-mic-recorder'
 
@@ -57,7 +57,6 @@ export function useVoiceConversation({
   const speechSessionRef = useRef<null | SpeechStreamSession>(null)
   const stopBargeMonitorRef = useRef<(() => void) | null>(null)
   const bargeCapturePendingRef = useRef(false)
-  const speechStartSequenceRef = useRef(0)
   const enabledRef = useRef(enabled)
   const mutedRef = useRef(muted)
   const busyRef = useRef(busy)
@@ -216,14 +215,11 @@ export function useVoiceConversation({
 
       dropSpeechSession()
 
-      // If stopVoicePlayback() was called externally (Stop button, end), the
-      // voice-playback sequence has advanced past what we captured at speech
-      // start — don't auto-start the next sentence, the user chose to stop.
-      const stoppedByUser =
-        speechStartSequenceRef.current > 0 &&
-        $voicePlayback.get().sequence > speechStartSequenceRef.current
-
-      speechStartSequenceRef.current = 0
+      // Only an explicit Stop / end should break the continuum. Internal
+      // stopVoicePlayback() calls (Edge speak-stream fallback, stream open,
+      // barge reclaim) bump the playback sequence too — treating those as
+      // "user stopped" left voice chat one-shot after the first reply.
+      const stoppedByUser = consumeUserStopRequested()
 
       if (enabledRef.current && !stoppedByUser) {
         pendingStartRef.current = true
@@ -355,8 +351,6 @@ export function useVoiceConversation({
           barged = true
         })
 
-        speechStartSequenceRef.current = $voicePlayback.get().sequence
-
         void playSpeechText(response.text, { source: 'voice-conversation' })
           .catch(error => notifyError(error, voiceCopy.playbackFailed))
           .finally(() => {
@@ -381,7 +375,8 @@ export function useVoiceConversation({
     (responseId: string) => {
       responseIdRef.current = responseId
       spokenSourceLengthRef.current = 0
-      speechStartSequenceRef.current = $voicePlayback.get().sequence
+      // Drop any stale Stop latch from a previous turn before we speak.
+      consumeUserStopRequested()
       setStatus('speaking')
 
       let barged = false
@@ -408,6 +403,7 @@ export function useVoiceConversation({
 
         if (!session) {
           // No streaming backend/provider: speak the whole reply once it lands.
+          // Default Edge TTS always takes this path (no chunked speak-stream).
           speechSessionRef.current = null
           awaitFallbackSpeech(responseId)
 
@@ -471,7 +467,7 @@ export function useVoiceConversation({
   const end = useCallback(async () => {
     pendingStartRef.current = false
     clearTurnTimeout()
-    stopVoicePlayback()
+    stopVoicePlayback({ userInitiated: true })
     handle.cancel()
     turnClosingRef.current = false
     awaitingSpokenResponseRef.current = false

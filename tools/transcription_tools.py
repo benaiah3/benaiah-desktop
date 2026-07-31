@@ -294,6 +294,17 @@ def _normalize_local_command_model(model_name: Optional[str]) -> str:
     return _normalize_local_model(model_name)
 
 
+def _mark_faster_whisper_available() -> bool:
+    """Refresh the import-time faster-whisper flag after a late install."""
+    global _HAS_FASTER_WHISPER
+    if _HAS_FASTER_WHISPER:
+        return True
+    if _safe_find_spec("faster_whisper"):
+        _HAS_FASTER_WHISPER = True
+        return True
+    return False
+
+
 def _try_lazy_install_stt() -> bool:
     """Attempt to lazy-install faster-whisper and return True on success.
 
@@ -302,6 +313,8 @@ def _try_lazy_install_stt() -> bool:
     installs it. This function re-checks dynamically after installation so
     the provider can use it immediately without a process restart.
     """
+    if _mark_faster_whisper_available():
+        return True
     try:
         from tools.lazy_deps import ensure
         # prompt=False: never raise a blocking input() prompt mid-session.
@@ -309,9 +322,7 @@ def _try_lazy_install_stt() -> bool:
         # input() deadlocks the terminal (#40490). The install is already
         # gated by security.allow_lazy_installs, so reaching here is opt-in.
         ensure("stt.faster_whisper", prompt=False)
-        # Re-check dynamically after install
-        import importlib.util as _iu
-        if _iu.find_spec("faster_whisper"):
+        if _mark_faster_whisper_available():
             return True
         logger.warning(
             "faster-whisper was installed but importlib still cannot find it "
@@ -328,6 +339,26 @@ def _try_lazy_install_stt() -> bool:
             exc,
         )
     return False
+
+
+def _external_cli_env() -> Dict[str, str]:
+    """Env for system/Homebrew Python CLIs that must not inherit the Hermes venv.
+
+    The agent process commonly exports its site-packages on ``PYTHONPATH``.
+    Spawning Homebrew ``whisper`` (a different Python ABI) then imports the
+    wrong NumPy wheels and crashes — which silently kills STT wake probes.
+    """
+    env = os.environ.copy()
+    for key in (
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "PYTHONSTARTUP",
+        "PYTHONUSERBASE",
+        "VIRTUAL_ENV",
+        "UV_PROJECT_ENVIRONMENT",
+    ):
+        env.pop(key, None)
+    return env
 
 
 # Names of the STT providers with native handlers in this module.
@@ -878,13 +909,13 @@ def _get_provider(stt_config: dict) -> str:
 
     if explicit:
         if provider == "local":
-            if _HAS_FASTER_WHISPER:
+            # Prefer in-venv faster-whisper (and late lazy-install) over a
+            # Homebrew whisper CLI. The CLI path inherits PYTHONPATH and often
+            # dies on a NumPy ABI mismatch — useless for wake-word probes.
+            if _HAS_FASTER_WHISPER or _try_lazy_install_stt():
                 return "local"
             if _has_local_command():
                 return "local_command"
-            # Try lazy-install before giving up
-            if _try_lazy_install_stt():
-                return "local"
             logger.warning(
                 "STT provider 'local' configured but unavailable "
                 "(install faster-whisper or set HERMES_LOCAL_STT_COMMAND)"
@@ -964,13 +995,10 @@ def _get_provider(stt_config: dict) -> str:
     # intentionally skipped while `mistralai` is quarantined on PyPI (malicious
     # 2.4.6 release on 2026-05-12).
 
-    if _HAS_FASTER_WHISPER:
+    if _HAS_FASTER_WHISPER or _try_lazy_install_stt():
         return "local"
     if _has_local_command():
         return "local_command"
-    # Try lazy-install before falling through to cloud providers
-    if _try_lazy_install_stt():
-        return "local"
     if _HAS_OPENAI and _resolve_provider_key("GROQ_API_KEY", "groq"):
         logger.info("No local STT available, using Groq Whisper API")
         return "groq"
@@ -1521,10 +1549,11 @@ def _transcribe_local_command(file_path: str, model_name: str) -> Dict[str, Any]
             )
             # User-provided templates (env var) may contain shell syntax; auto-detected commands are safe for list mode.
             use_shell = bool(os.getenv(LOCAL_STT_COMMAND_ENV, "").strip())
+            cli_env = _external_cli_env()
             if use_shell:
-                subprocess.run(command, shell=True, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300, stdin=subprocess.DEVNULL, creationflags=windows_hide_flags())
+                subprocess.run(command, shell=True, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300, stdin=subprocess.DEVNULL, env=cli_env, creationflags=windows_hide_flags())
             else:
-                subprocess.run(shlex.split(command), check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300, stdin=subprocess.DEVNULL, creationflags=windows_hide_flags())
+                subprocess.run(shlex.split(command), check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300, stdin=subprocess.DEVNULL, env=cli_env, creationflags=windows_hide_flags())
             
 
             txt_files = sorted(Path(output_dir).glob("*.txt"))
