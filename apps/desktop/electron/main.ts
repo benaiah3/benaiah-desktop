@@ -713,10 +713,10 @@ function readPersistedThemeSource() {
       return parsed.themeSource
     }
   } catch {
-    // Missing / malformed → follow the OS like a fresh install.
+    // Missing / malformed → Benaiah dark default (matches website + mobile).
   }
 
-  return 'system'
+  return 'dark'
 }
 
 function writePersistedThemeSource(mode) {
