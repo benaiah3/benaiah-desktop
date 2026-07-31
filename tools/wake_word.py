@@ -76,9 +76,12 @@ _DEFAULTS: Dict[str, Any] = {
     "enabled": False,
     "surface": "gui",
     "input_device": None,
-    "provider": "sherpa",
+    # openWakeWord + the bundled trained model is the reliable on-device path.
+    # Sherpa open-vocab remains available for custom phrases, but the branded
+    # "hey benaiah" ear uses the trained classifier (see tools/wakewords/).
+    "provider": "openwakeword",
     "phrase": "hey benaiah",
-    "sensitivity": 0.6,
+    "sensitivity": 0.5,
     "confirmation_frames": _DEFAULT_CONFIRMATION_FRAMES,
     "start_new_session": True,
 }

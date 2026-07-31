@@ -1,26 +1,31 @@
 """Benaiah-specific wake-word contract tests (no microphone or network)."""
 
+from pathlib import Path
+
 import tools.wake_word as wake
 
 
-def test_benaiah_defaults_use_local_open_phrase_engine(monkeypatch):
+def test_benaiah_defaults_use_trained_openwakeword_model(monkeypatch):
     monkeypatch.setattr(
         "hermes_cli.config.load_config",
         lambda: {
             "wake_word": {
                 "enabled": False,
                 "surface": "gui",
-                "provider": "sherpa",
+                "provider": "openwakeword",
                 "phrase": "hey benaiah",
                 "start_new_session": True,
+                "openwakeword": {"model": "hey_hermes"},
             }
         },
     )
     config = wake.load_wake_word_config()
     assert config["enabled"] is False
-    assert config["provider"] == "sherpa"
+    assert config["provider"] == "openwakeword"
     assert wake.wake_phrase(config) == "hey benaiah"
     assert config["start_new_session"] is True
+    assert (Path(__file__).resolve().parents[2] / "tools" / "wakewords" / "hey_hermes.tflite").is_file()
+    assert (Path(__file__).resolve().parents[2] / "tools" / "wakewords" / "hey_hermes.onnx").is_file()
 
 
 def test_benaiah_wake_is_scoped_to_desktop_by_default():
