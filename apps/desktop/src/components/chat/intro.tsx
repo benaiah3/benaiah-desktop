@@ -154,11 +154,13 @@ function resolveCopy(personality?: string, seed?: number): IntroCopy {
   return pickCopy(copies, seed)
 }
 
-/** Website wordmark: system sans, weight 800, 0.1em tracking, italic "ai". */
+/** Website wordmark: system sans, weight 800, 0.1em tracking, italic "ai".
+ *  At hero scale the italic A leans into the preceding N — a hair of
+ *  padding-left restores even rhythm without loosening the rest. */
 function WordmarkGlyph() {
   return (
     <>
-      Ben<span className="italic">ai</span>ah
+      Ben<span className="italic pl-[0.08em]">ai</span>ah
     </>
   )
 }
