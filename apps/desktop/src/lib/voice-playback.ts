@@ -19,6 +19,8 @@ const PLAYBACK_STALL_MS = 15_000
 let currentAudio: HTMLAudioElement | null = null
 let currentStop: (() => void) | null = null
 let sequence = 0
+/** Set only by an explicit user Stop / end — not by internal speak handoffs. */
+let userStopRequested = false
 
 function currentState(
   status: VoicePlaybackState['status'],
@@ -39,7 +41,20 @@ export interface VoicePlaybackOptions {
   source: VoicePlaybackSource
 }
 
-export function stopVoicePlayback() {
+export interface StopVoicePlaybackOptions {
+  /**
+   * True when the user hit Stop / ended voice chat. Internal handoffs
+   * (Edge fallback, stream open, barge-in mic reclaim) must leave this
+   * unset so the continuum can re-listen after TTS finishes.
+   */
+  userInitiated?: boolean
+}
+
+export function stopVoicePlayback(options: StopVoicePlaybackOptions = {}) {
+  if (options.userInitiated) {
+    userStopRequested = true
+  }
+
   sequence += 1
   currentStop?.()
   currentStop = null
@@ -58,6 +73,14 @@ export function stopVoicePlayback() {
     source: null,
     status: 'idle'
   })
+}
+
+/** True once after an explicit user Stop/end; clears the latch. */
+export function consumeUserStopRequested(): boolean {
+  const requested = userStopRequested
+  userStopRequested = false
+
+  return requested
 }
 
 // ---------------------------------------------------------------------------

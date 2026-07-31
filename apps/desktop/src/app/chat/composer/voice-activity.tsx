@@ -239,7 +239,7 @@ export function VoicePlaybackActivity() {
 
       <Button
         className="h-6 shrink-0 gap-1 rounded-full px-2 text-[0.6875rem]"
-        onClick={stopVoicePlayback}
+        onClick={() => stopVoicePlayback({ userInitiated: true })}
         size="sm"
         type="button"
         variant="ghost"
