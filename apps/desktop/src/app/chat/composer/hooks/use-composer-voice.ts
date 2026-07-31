@@ -7,8 +7,8 @@ import { triggerHaptic } from '@/lib/haptics'
 import { $voiceConversationStartRequest, takeVoiceConversationStart } from '@/store/composer'
 import { resetBrowseState } from '@/store/composer-input-history'
 import { $gateway } from '@/store/gateway'
-import { notifyError } from '@/store/notifications'
-import { $autoSpeakReplies, setAutoSpeakReplies } from '@/store/voice-prefs'
+import { notify, notifyError } from '@/store/notifications'
+import { $autoSpeakReplies, $voiceStopPhrase, setAutoSpeakReplies } from '@/store/voice-prefs'
 import { resumeWakeAfterVoice } from '@/store/wake-word'
 
 import type { ComposerTarget } from '../focus'
@@ -27,6 +27,9 @@ interface UseComposerVoiceArgs {
   focusInput: () => void
   insertText: (text: string) => void
   maxRecordingSeconds: number
+  /** Interrupt the in-flight agent turn (Stop-button seam) — fired when the
+   *  user speaks over the model while it is still generating. */
+  onInterrupt?: () => Promise<void> | void
   onSubmit: ChatBarProps['onSubmit']
   onTranscribeAudio: ChatBarProps['onTranscribeAudio']
   sessionId: string | null | undefined
@@ -48,6 +51,7 @@ export function useComposerVoice({
   focusInput,
   insertText,
   maxRecordingSeconds,
+  onInterrupt,
   onSubmit,
   onTranscribeAudio,
   sessionId,
@@ -59,8 +63,6 @@ export function useComposerVoice({
   const [voiceConversationActive, setVoiceConversationActive] = useState(false)
   const lastSpokenIdRef = useRef<string | null>(null)
   const voiceStartRequest = useStore($voiceConversationStartRequest)
-  const wakePausedRef = useRef(false)
-  const wakePauseBarrierRef = useRef<Promise<void> | null>(null)
 
   const { dictate, voiceActivityState, voiceStatus } = useVoiceRecorder({
     focusInput,
@@ -118,41 +120,34 @@ export function useComposerVoice({
     await onSubmit(text)
   }
 
-  const resumeWakeIfPaused = useCallback(() => {
-    if (!wakePausedRef.current) {
-      return
-    }
-
-    wakePausedRef.current = false
-    wakePauseBarrierRef.current = null
-    void resumeWakeAfterVoice()
-  }, [])
-
-  const pauseWakeForVoice = useCallback(() => {
-    wakePausedRef.current = true
-
-    const barrier = (async () => {
-      try {
-        await $gateway.get()?.request('wake.pause', {})
-      } catch {
-        // Older backend or an unarmed detector: nothing owns the mic.
-      }
-    })()
-
-    wakePauseBarrierRef.current = barrier
-
-    return barrier
-  }, [])
+  const wakePausedRef = useRef(false)
+  // Resolves once the in-flight wake.pause round-trip completes (mic released by
+  // the wake listener). The conversation awaits this before opening its own mic
+  // so the two never contend for the device — on Windows especially, opening the
+  // capture device while the wake listener still holds it makes getUserMedia
+  // fail and the conversation never starts listening.
+  const wakePauseBarrierRef = useRef<Promise<void> | null>(null)
 
   const conversation = useVoiceConversation({
-    beforeMicOpen: () => wakePauseBarrierRef.current ?? undefined,
     busy,
     consumePendingResponse,
     enabled: voiceConversationActive,
     onFatalError: () => setVoiceConversationActive(false),
+    // Speaking over the model mid-generation interrupts the in-flight turn —
+    // the same seam as the Stop button — so the interjection becomes the next
+    // turn instead of waiting behind a reply the user already rejected.
+    onInterrupt,
+    // A spoken stop command ("stop", "never mind", "goodbye", …) ends the
+    // hands-free conversation. Flipping the flag is the authoritative off
+    // switch — the enabled=false prop + effect below drive conversation.end()
+    // teardown (mic close, wake re-arm).
+    onStopWord: () => setVoiceConversationActive(false),
     onSubmit: submitVoiceTurn,
     onTranscribeAudio,
-    pendingResponse: pendingTurnResponse
+    pendingResponse: pendingTurnResponse,
+    // Before the conversation opens the mic, wait for any in-flight wake.pause
+    // to finish releasing the capture device (see wakePauseBarrierRef).
+    beforeMicOpen: () => wakePauseBarrierRef.current ?? undefined
   })
 
   // The `composer.voice` hotkey (Ctrl+B) toggles the conversation. Starting
@@ -167,9 +162,9 @@ export function useComposerVoice({
       setVoiceConversationActive(false)
       void conversation.end()
     } else {
-      void pauseWakeForVoice().finally(() => setVoiceConversationActive(true))
+      setVoiceConversationActive(true)
     }
-  }, [conversation, disabled, pauseWakeForVoice, voiceConversationActive])
+  }, [conversation, disabled, voiceConversationActive])
 
   useEffect(
     () => onComposerVoiceToggleRequest(toggled => toggled === target && toggleVoiceConversation()),
@@ -177,30 +172,75 @@ export function useComposerVoice({
   )
 
   useEffect(() => {
-    if (
-      target === 'main' &&
-      !disabled &&
-      takeVoiceConversationStart(voiceStartRequest) &&
-      !voiceConversationActive
-    ) {
-      void pauseWakeForVoice().finally(() => setVoiceConversationActive(true))
+    if (target === 'main' && !disabled && takeVoiceConversationStart(voiceStartRequest) && !voiceConversationActive) {
+      setVoiceConversationActive(true)
     }
-  }, [disabled, pauseWakeForVoice, target, voiceConversationActive, voiceStartRequest])
+  }, [disabled, target, voiceConversationActive, voiceStartRequest])
+
+  const resumeWakeIfPaused = useCallback(() => {
+    if (!wakePausedRef.current) {
+      return
+    }
+
+    wakePausedRef.current = false
+    wakePauseBarrierRef.current = null
+    // Reconcile, don't just resume: the wake word is a persistent setting, so
+    // ending a voice chat must re-arm the listener whenever config says
+    // enabled — including when the raw resume loses the mic-release race.
+    void resumeWakeAfterVoice()
+  }, [])
+
+  // The ref is a request token (did WE issue wake.pause?), not an atom mirror —
+  // it guards resumeWakeIfPaused from resuming a detector another surface owns.
+  const pauseWakeForVoice = useCallback(() => {
+    wakePausedRef.current = true
+
+    const barrier = (async () => {
+      try {
+        await $gateway.get()?.request('wake.pause', {})
+      } catch {
+        // No wake listener / older backend — nothing held the mic.
+      }
+    })()
+
+    wakePauseBarrierRef.current = barrier
+
+    return barrier
+  }, [])
 
   useEffect(() => {
-    if (!voiceConversationActive) {
+    if (voiceConversationActive) {
+      pauseWakeForVoice()
+    } else {
       resumeWakeIfPaused()
     }
-  }, [resumeWakeIfPaused, voiceConversationActive])
+  }, [pauseWakeForVoice, resumeWakeIfPaused, voiceConversationActive])
+
+  // 'Say "stop" to end the voice chat.' notice when the conversation starts.
+  // Phrase comes from voice.stop_phrases (first entry) so a custom phrase
+  // renders correctly; a null phrase (stop_phrases: []) shows no notice.
+  useEffect(() => {
+    if (!voiceConversationActive) {
+      return
+    }
+
+    const phrase = $voiceStopPhrase.get()
+
+    if (phrase) {
+      notify({
+        id: 'voice-stop-hint',
+        kind: 'info',
+        icon: 'mic',
+        message: t.notifications.voice.sayStopToEnd(phrase)
+      })
+    }
+  }, [t, voiceConversationActive])
 
   useEffect(() => resumeWakeIfPaused, [resumeWakeIfPaused])
 
   // Explicit start/end for the on-screen conversation controls (the hotkey uses
   // the gated toggle above).
-  const startConversation = useCallback(
-    () => void pauseWakeForVoice().finally(() => setVoiceConversationActive(true)),
-    [pauseWakeForVoice]
-  )
+  const startConversation = useCallback(() => setVoiceConversationActive(true), [])
 
   const endConversation = useCallback(() => {
     setVoiceConversationActive(false)
