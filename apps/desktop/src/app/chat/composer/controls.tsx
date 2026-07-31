@@ -196,6 +196,8 @@ function ConversationPill({
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
+      {/* Keep the ear visible during voice chat — shown paused, since the
+          conversation holds the mic (the one time wake must not listen). */}
       <WakeWordButton disabled={disabled} pausedForVoice />
       <Tip label={muted ? c.unmuteMic : c.muteMic}>
         <Button
@@ -310,8 +312,15 @@ function AutoSpeakButton({ active, disabled, onToggle }: { active: boolean; disa
   )
 }
 
-// Local, opt-in “Hey Benaiah” wake control. The backend owns the microphone
-// lease and reports whether this desktop is actually armed.
+// "Hey Benaiah" wake-word toggle. ALWAYS rendered — the ear never hides. A
+// user must always be able to click it to turn passive listening on; if the
+// backend can't start (missing STT/TTS, deps still installing, no mic
+// permission, etc.) the click surfaces the reason in the tooltip and the
+// toggle stays off. States: listening (accent-highlighted), off (muted
+// ear-off), and paused-for-voice (disabled while a voice conversation holds
+// the mic — the one time wake genuinely must not listen). Backend refusals
+// ({started:false, reason}) keep the toggle off and put the reason/hint in
+// the tooltip.
 function WakeWordButton({ disabled, pausedForVoice = false }: { disabled: boolean; pausedForVoice?: boolean }) {
   const { t } = useI18n()
   const c = t.composer

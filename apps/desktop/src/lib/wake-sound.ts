@@ -1,5 +1,5 @@
 // Wake-word activation chime. A short, bright, rising two-note "ding" that
-// plays the moment "Hey Benaiah" is detected, so it's obvious the wake
+// plays the moment "Hey Hermes" is detected, so it's obvious the wake
 // registered before voice capture starts. Deliberately distinct from the
 // turn-end completion cue (completion-sound.ts): this one RISES (open/ready),
 // the completion cue settles (done). Reuses the same lightweight WebAudio
@@ -37,6 +37,7 @@ function getCtx(): AudioContext | null {
     return null
   }
 }
+
 // One enveloped sine voice → master. Linear-ish attack into an exponential
 // decay keeps the tail smooth and avoids the click you get ramping to zero.
 function ding(ac: AudioContext, master: GainNode, t0: number, freq: number, dur: number, gain: number) {

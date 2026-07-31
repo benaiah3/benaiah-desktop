@@ -21,8 +21,8 @@ export const $composerDraft = atom('')
 export const $composerAttachments = atom<ComposerAttachment[]>([])
 export const $composerTerminalSelections = atom<Record<string, string>>({})
 
-// Latched because wake activation can open a fresh session and remount the
-// main composer before it is ready to start voice capture.
+// Latched because opening a fresh session may remount the main composer before
+// it can start voice. Session-tile composers deliberately never consume this.
 export const $voiceConversationStartRequest = atom(0)
 let nextVoiceStartRequest = 0
 let handledVoiceStartRequest = 0
