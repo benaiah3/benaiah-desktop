@@ -1808,9 +1808,6 @@ export const ja = defineLocale({
       '調整または続行'
     ],
     startVoice: '音声会話を開始',
-    wakeWordListening: phrase => `「${phrase}」を待機中`,
-    wakeWordOff: phrase => `「${phrase}」をオンにする`,
-    wakeWordPausedVoice: phrase => `音声会話中は「${phrase}」が一時停止します`,
     queueMessage: 'メッセージをキューに入れる',
     stop: '停止',
     send: '送信',

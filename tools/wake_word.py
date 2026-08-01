@@ -1,4 +1,4 @@
-"""Wake-word ("Hey Benaiah") detection — hands-free session trigger.
+"""Wake-word ("Benaiah") detection — hands-free session trigger.
 
 A lightweight, always-on hotword listener that fires a callback when a wake
 phrase is spoken — the "Hey Siri" / "Alexa" pattern. Shared by the CLI, TUI, and
@@ -10,7 +10,7 @@ Engines (detection stays on-device for openwakeword/sherpa/porcupine; the STT
 engine uses the already-configured local speech-to-text path):
 
 * **stt** (Benaiah default) — energy-gated rolling buffer transcribed by the
-  configured local STT provider. Matches the branded phrase ``hey benaiah``
+  configured local STT provider. Matches the branded phrase ``benaiah``
   without a separately trained hotword model.
 * **openwakeword** — loads an ONNX/TFLite model. Ships the upstream
   ``hey_hermes`` classifier under ``tools/wakewords/`` (useful while a dedicated
@@ -58,6 +58,8 @@ _START_TIMEOUT_SECONDS = 5.0
 # consecutive frames, so we require N-in-a-row above threshold before firing.
 # This is the primary lever against unintended triggers on ambient talk.
 _DEFAULT_CONFIRMATION_FRAMES = 3
+_DEFAULT_BENAIAH_PHRASE = "benaiah"
+_LEGACY_BENAIAH_PHRASE = "hey benaiah"
 
 # Dead-mic detection: an int16 stream whose peak stays at/below this for this
 # many consecutive seconds is flagged as silent. Desktop push-to-talk and the
@@ -79,10 +81,10 @@ _DEFAULTS: Dict[str, Any] = {
     "enabled": False,
     "surface": "gui",
     "input_device": None,
-    # Local STT phrase spotting — reliable for the branded "hey benaiah" without
+    # Local STT phrase spotting — reliable for the branded "benaiah" without
     # a separately trained openWakeWord model. openwakeword/sherpa remain available.
     "provider": "stt",
-    "phrase": "hey benaiah",
+    "phrase": "benaiah",
     "sensitivity": 0.5,
     "confirmation_frames": _DEFAULT_CONFIRMATION_FRAMES,
     "start_new_session": True,
@@ -90,21 +92,21 @@ _DEFAULTS: Dict[str, Any] = {
 
 # STT often mangles the uncommon name; accept close forms.
 _PHRASE_ALIASES = {
-    "hey benaiah": (
+    "benaiah": (
         "hey benaiah",
-        "hey beniah",
-        "hey benaya",
-        "hey banaya",
-        "hey bernaya",
-        "hey benita",
-        "hey bonita",
-        "hey banita",
-        "hey benea",
-        "hey bania",
-        "hey benia",
+        "beniah",
+        "benaya",
+        "banaya",
+        "bernaya",
+        "benita",
+        "bonita",
+        "banita",
+        "benea",
+        "bania",
+        "benia",
         "a benaya",
         "a benaiah",
-        "hey ben i a",
+        "ben i a",
     ),
 }
 
@@ -209,14 +211,23 @@ def ensure_tflite_runtime() -> bool:
 
 
 def load_wake_word_config() -> Dict[str, Any]:
-    """Return the ``wake_word`` config section, shape-guarded to a dict."""
+    """Return the effective ``wake_word`` section, including brand migrations."""
     try:
         from hermes_cli.config import load_config
 
         cfg = load_config().get("wake_word")
     except Exception:
         cfg = None
-    return cfg if isinstance(cfg, dict) else {}
+    if not isinstance(cfg, dict):
+        return {}
+    # Older Benaiah releases materialized their then-default phrase into
+    # config.yaml. Treat that exact former default as a product default so an
+    # app update shortens it for existing installations too. Other values are
+    # user-owned custom phrases and must pass through unchanged.
+    if str(cfg.get("phrase") or "").strip().casefold() == _LEGACY_BENAIAH_PHRASE:
+        cfg = dict(cfg)
+        cfg["phrase"] = _DEFAULT_BENAIAH_PHRASE
+    return cfg
 
 
 def _get(cfg: Dict[str, Any], key: str) -> Any:
@@ -266,7 +277,10 @@ def _confirmation_frames(cfg: Dict[str, Any]) -> int:
 def wake_phrase(cfg: Optional[Dict[str, Any]] = None) -> str:
     """Human-facing wake phrase label (purely cosmetic; engine keys detection)."""
     cfg = cfg if cfg is not None else load_wake_word_config()
-    return str(_get(cfg, "phrase")) or "hey benaiah"
+    phrase = str(_get(cfg, "phrase") or "").strip()
+    if phrase.casefold() == _LEGACY_BENAIAH_PHRASE:
+        return _DEFAULT_BENAIAH_PHRASE
+    return phrase or _DEFAULT_BENAIAH_PHRASE
 
 
 def wake_surface_enabled(surface: str, cfg: Optional[Dict[str, Any]] = None) -> bool:
@@ -320,7 +334,7 @@ def enrolled_profile_phrases() -> Dict[str, str]:
                 wc = raw.get("wake_word") or {}
                 if not isinstance(wc, dict) or not wc.get("enabled"):
                     continue
-                phrase = str(wc.get("phrase") or f"hey {name}").strip()
+                phrase = wake_phrase(wc) if wc.get("phrase") else f"hey {name}"
                 if phrase:
                     phrases[name] = phrase
             except Exception:
@@ -608,7 +622,7 @@ class _SherpaKwsEngine(_Engine):
         # on — every other wake-enabled profile's phrase, so ONE listener can
         # wake any profile ("hey hermes" / "hey coder" / ...). display-name →
         # profile is kept for routing the match back.
-        phrase = str(_get(cfg, "phrase") or "hey benaiah").strip()
+        phrase = wake_phrase(cfg)
         own_profile = _active_profile_name()
         phrase_map: Dict[str, str] = {phrase: own_profile}
         if bool(cfg.get("profile_routing", True)):
@@ -775,7 +789,7 @@ class _SttPhraseEngine(_Engine):
     """Energy-gated STT phrase spotter for branded wake words.
 
     Uses the user's configured local STT path (already required for voice) on a
-    short rolling buffer. Heavier than openWakeWord, but works for "hey benaiah"
+    short rolling buffer. Heavier than openWakeWord, but works for "benaiah"
     without a separately trained hotword classifier.
     """
 
