@@ -61,6 +61,7 @@ export function useComposerVoice({
   // A tile's composer speaks ITS transcript, not the primary chat's.
   const { $messages } = useComposerScope()
   const [voiceConversationActive, setVoiceConversationActive] = useState(false)
+  const [conversationVoice, setConversationVoice] = useState<string | null>(null)
   const lastSpokenIdRef = useRef<string | null>(null)
   const voiceStartRequest = useStore($voiceConversationStartRequest)
 
@@ -145,6 +146,7 @@ export function useComposerVoice({
     onSubmit: submitVoiceTurn,
     onTranscribeAudio,
     pendingResponse: pendingTurnResponse,
+    voice: conversationVoice,
     // Before the conversation opens the mic, wait for any in-flight wake.pause
     // to finish releasing the capture device (see wakePauseBarrierRef).
     beforeMicOpen: () => wakePauseBarrierRef.current ?? undefined
@@ -162,6 +164,7 @@ export function useComposerVoice({
       setVoiceConversationActive(false)
       void conversation.end()
     } else {
+      setConversationVoice(null)
       setVoiceConversationActive(true)
     }
   }, [conversation, disabled, voiceConversationActive])
@@ -172,7 +175,14 @@ export function useComposerVoice({
   )
 
   useEffect(() => {
-    if (target === 'main' && !disabled && takeVoiceConversationStart(voiceStartRequest) && !voiceConversationActive) {
+    if (target !== 'main' || disabled) {
+      return
+    }
+
+    const request = takeVoiceConversationStart(voiceStartRequest)
+
+    if (request && !voiceConversationActive) {
+      setConversationVoice(request.voice)
       setVoiceConversationActive(true)
     }
   }, [disabled, target, voiceConversationActive, voiceStartRequest])

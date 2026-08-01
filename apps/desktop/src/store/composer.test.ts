@@ -18,14 +18,15 @@ import {
 
 describe('voice conversation start requests', () => {
   it('latches each request until the main composer consumes it once', () => {
-    requestVoiceConversationStart()
+    requestVoiceConversationStart('en-GB-RyanNeural')
     const first = $voiceConversationStartRequest.get()
 
-    expect(takeVoiceConversationStart(first)).toBe(true)
-    expect(takeVoiceConversationStart(first)).toBe(false)
+    expect(takeVoiceConversationStart(first)).toEqual(first)
+    expect(first.voice).toBe('en-GB-RyanNeural')
+    expect(takeVoiceConversationStart(first)).toBeNull()
 
-    requestVoiceConversationStart()
-    expect(takeVoiceConversationStart($voiceConversationStartRequest.get())).toBe(true)
+    requestVoiceConversationStart('  en-GB-SoniaNeural  ')
+    expect(takeVoiceConversationStart($voiceConversationStartRequest.get())?.voice).toBe('en-GB-SoniaNeural')
   })
 })
 

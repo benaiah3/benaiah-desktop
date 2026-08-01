@@ -1581,12 +1581,12 @@ export async function transcribeAudio(dataUrl: string, mimeType?: string): Promi
   })
 }
 
-export function speakText(text: string): Promise<AudioSpeakResponse> {
+export function speakText(text: string, voice?: string | null): Promise<AudioSpeakResponse> {
   return window.hermesDesktop.api<AudioSpeakResponse>({
     ...profileScoped(),
     path: '/api/audio/speak',
     method: 'POST',
-    body: { text },
+    body: { text, ...(voice?.trim() ? { voice: voice.trim() } : {}) },
     // TTS blocks until provider synthesis, file read, and base64 encoding
     // finish. Remote providers and large messages regularly exceed the
     // default 15s Electron backend timeout.

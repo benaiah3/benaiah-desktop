@@ -26,12 +26,13 @@ vi.mock('@/lib/voice-barge-in', () => ({
 }))
 
 const markVoicePlaybackInterrupted = vi.fn()
-const playSpeechText = vi.fn(async (_text: string, _options: { source: string }) => true)
+const playSpeechText = vi.fn(async (_text: string, _options: { source: string; voice?: string }) => true)
 
 const startSpeechStream = vi.fn(
-  async (
-    _options: { source: string }
-  ): Promise<null | { append: (text: string) => void; done: Promise<'fallback'>; finish: () => void }> => null
+  async (_options: {
+    source: string
+    voice?: string
+  }): Promise<null | { append: (text: string) => void; done: Promise<'fallback'>; finish: () => void }> => null
 )
 
 const stopVoicePlayback = vi.fn()
@@ -39,8 +40,8 @@ const stopVoicePlayback = vi.fn()
 vi.mock('@/lib/voice-playback', () => ({
   consumeUserStopRequested: vi.fn(() => false),
   markVoicePlaybackInterrupted: () => markVoicePlaybackInterrupted(),
-  playSpeechText: (text: string, options: { source: string }) => playSpeechText(text, options),
-  startSpeechStream: (options: { source: string }) => startSpeechStream(options),
+  playSpeechText: (text: string, options: { source: string; voice?: string }) => playSpeechText(text, options),
+  startSpeechStream: (options: { source: string; voice?: string }) => startSpeechStream(options),
   stopVoicePlayback: () => stopVoicePlayback()
 }))
 
@@ -93,6 +94,7 @@ function renderConversation(
     onInterrupt?: () => void
     pendingResponse?: () => { id: string; pending: boolean; text: string } | null
     transcript?: string
+    voice?: string
   } = {}
 ) {
   const onInterrupt = overrides.onInterrupt ?? vi.fn()
@@ -124,7 +126,8 @@ function renderConversation(
         onStopWord,
         onSubmit,
         onTranscribeAudio,
-        pendingResponse: overrides.pendingResponse ?? (() => null)
+        pendingResponse: overrides.pendingResponse ?? (() => null),
+        voice: overrides.voice
       }),
     { initialProps: { busy: false } }
   )
@@ -220,7 +223,10 @@ describe('useVoiceConversation full-duplex barge-in', () => {
       done: Promise.resolve('fallback'),
       finish: vi.fn()
     })
-    const { hook } = renderConversation({ pendingResponse: () => response })
+    const { hook } = renderConversation({
+      pendingResponse: () => response,
+      voice: 'en-GB-SoniaNeural'
+    })
 
     await enterThinking(hook)
 
@@ -228,7 +234,12 @@ describe('useVoiceConversation full-duplex barge-in', () => {
     // it needs whole-text fallback on this machine.
     response = { id: 'interim', pending: true, text: 'Let me check that.' }
     hook.rerender({ busy: true })
-    await waitFor(() => expect(startSpeechStream).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(startSpeechStream).toHaveBeenCalledWith({
+        source: 'voice-conversation',
+        voice: 'en-GB-SoniaNeural'
+      })
+    )
 
     // Reconciliation briefly removes the interim bubble while generation is
     // still active. The old poll exited here and never called TTS.
@@ -243,7 +254,8 @@ describe('useVoiceConversation full-duplex barge-in', () => {
 
     await waitFor(() =>
       expect(playSpeechText).toHaveBeenCalledWith('Today is Saturday, the first of August.', {
-        source: 'voice-conversation'
+        source: 'voice-conversation',
+        voice: 'en-GB-SoniaNeural'
       })
     )
   })

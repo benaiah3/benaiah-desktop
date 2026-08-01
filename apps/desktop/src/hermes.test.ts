@@ -348,7 +348,7 @@ describe('Hermes REST helpers', () => {
       provider: 'openai'
     })
 
-    await expect(speakText('Read this aloud')).resolves.toEqual({
+    await expect(speakText('Read this aloud', 'en-GB-SoniaNeural')).resolves.toEqual({
       data_url: 'data:audio/mpeg;base64,AA==',
       mime_type: 'audio/mpeg',
       ok: true,
@@ -356,7 +356,7 @@ describe('Hermes REST helpers', () => {
     })
 
     expect(api).toHaveBeenCalledWith({
-      body: { text: 'Read this aloud' },
+      body: { text: 'Read this aloud', voice: 'en-GB-SoniaNeural' },
       method: 'POST',
       path: '/api/audio/speak',
       profile: 'rhaegal',

@@ -2784,6 +2784,7 @@ def text_to_speech_tool(
     speed: Optional[float] = None,
     instructions: Optional[str] = None,
     provider: Optional[str] = None,
+    voice: Optional[str] = None,
 ) -> str:
     """
     Convert text to speech audio.
@@ -2811,6 +2812,8 @@ def text_to_speech_tool(
             from ``tts.providers.<name>``, or plugin-registered provider
             names.  When ``None`` (the default), the configured provider
             from ``tts.provider`` in config.yaml is used.
+        voice: Optional voice override for this synthesis call. This is used
+            by desktop wake profiles and never persists to config.
 
     Returns:
         str: JSON result with success, file_path, and optionally MEDIA tag.
@@ -2827,6 +2830,15 @@ def text_to_speech_tool(
         return tool_error("Text is empty after TTS cleanup", success=False)
 
     tts_config = _load_tts_config()
+
+    if voice and voice.strip():
+        # Wake profiles currently use Edge's stable locale-qualified voice
+        # identifiers. Copy both levels so a one-turn selection never mutates
+        # the cached/global TTS preferences.
+        tts_config = dict(tts_config)
+        edge_config = dict(tts_config.get("edge") or {})
+        edge_config["voice"] = voice.strip()
+        tts_config["edge"] = edge_config
 
     # When the model supplies a speed parameter, inject it into the config
     # so all downstream provider functions pick it up uniformly.

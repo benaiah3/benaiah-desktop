@@ -1499,7 +1499,7 @@ def test_prompt_submit_longer_text_not_consumed_in_voice_mode(monkeypatch):
 def test_wake_owner_is_sticky_and_routes_detection_to_first_transport(monkeypatch):
     from tools import wake_word
 
-    state = {"owner": None, "callback": None, "paused": False}
+    state = {"owner": None, "callback": None, "paused": False, "match": None}
     voice_callbacks = {}
 
     def start_listening(callback, *, owner, config):
@@ -1545,6 +1545,7 @@ def test_wake_owner_is_sticky_and_routes_detection_to_first_transport(monkeypatc
     monkeypatch.setattr(wake_word, "pause_listening", pause_listening)
     monkeypatch.setattr(wake_word, "stop_listening", stop_listening)
     monkeypatch.setattr(wake_word, "owns_listener", lambda owner: state["owner"] is owner)
+    monkeypatch.setattr(wake_word, "get_last_match", lambda: state["match"])
     monkeypatch.setattr(
         wake_word,
         "is_listening",
@@ -1619,7 +1620,12 @@ def test_wake_owner_is_sticky_and_routes_detection_to_first_transport(monkeypatc
         assert emitted == [(
             "wake.detected",
             "first-session",
-            {"phrase": "hey hermes", "profile": None, "start_new_session": True},
+            {
+                "phrase": "hey hermes",
+                "profile": None,
+                "start_new_session": True,
+                "voice": "en-GB-RyanNeural",
+            },
             first,
         )]
         assert state["paused"] is True
@@ -1652,11 +1658,17 @@ def test_wake_owner_is_sticky_and_routes_detection_to_first_transport(monkeypatc
         assert reclaimed["result"]["started"] is True
         assert state["owner"] is second
 
+        state["match"] = ("sonya", "")
         state["callback"]()
         assert emitted[-1] == (
             "wake.detected",
             "second-session",
-            {"phrase": "hey hermes", "profile": None, "start_new_session": True},
+            {
+                "phrase": "sonya",
+                "profile": None,
+                "start_new_session": True,
+                "voice": "en-GB-SoniaNeural",
+            },
             second,
         )
 
@@ -7165,7 +7177,7 @@ def test_session_compress_uses_compress_helper(monkeypatch):
     emit.assert_any_call("status.update", "sid", {"kind": "status", "text": "ready"})
 
 
-def test_session_compress_normalizes_messages_for_desktop_transcript(monkeypatch):
+def test_session_compress_preserves_normalized_tool_result_for_desktop_transcript(monkeypatch):
     history = [
         {
             "role": "assistant",
@@ -7192,7 +7204,7 @@ def test_session_compress_normalizes_messages_for_desktop_transcript(monkeypatch
         server._sessions.pop("sid", None)
 
     assert response["result"]["messages"] == server._history_to_messages(history)
-    assert "very sensitive tool output" not in str(response["result"]["messages"])
+    assert response["result"]["messages"][-1]["text"] == "very sensitive tool output"
 
 
 def test_session_compress_returns_compute_host_history(monkeypatch):

@@ -298,7 +298,14 @@ def test_session_resume_returns_hydrated_messages(server, monkeypatch):
     assert resp["result"]["messages"] == [
         {"role": "user", "text": "hello"},
         {"role": "assistant", "text": "yo", "reasoning": "thoughts"},
-        {"role": "tool", "name": "tool", "context": ""},
+        {
+            "role": "tool",
+            "name": "tool",
+            "context": "",
+            "text": "searched",
+            "content": "searched",
+            "tool_call_id": "",
+        },
     ]
 
 
@@ -614,5 +621,4 @@ def test_unregister_live_transport_stops_delivery(capture):
     assert a.frames == []
     # No live transports left → fell back to stdio.
     assert json.loads(buf.getvalue())["params"]["type"] == "skin.changed"
-
 

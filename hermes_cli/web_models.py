@@ -144,6 +144,10 @@ class ModelAssignment(BaseModel):
     # endpoint that requires auth works from the GUI. Mirrors the key the
     # ``hermes model`` custom flow collects.
     api_key: str = ""
+    # Wire format used by custom/local OpenAI-compatible endpoints.  The
+    # handler already validates and persists this value; keeping it in the
+    # request model prevents Pydantic from dropping it before the handler runs.
+    api_mode: str = ""
     confirm_expensive_model: bool = False
     profile: Optional[str] = None
 
@@ -292,6 +296,7 @@ class DebugShareRequest(BaseModel):
 
 class TTSSpeakRequest(BaseModel):
     text: str
+    voice: Optional[str] = None
 
 
 # --- from web_server.py (originally lines 11549-11551) ---
@@ -706,4 +711,3 @@ class _PluginProvidersPutBody(BaseModel):
 
 class _PluginVisibilityBody(BaseModel):
     hidden: bool
-

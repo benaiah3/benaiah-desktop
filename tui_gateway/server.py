@@ -12812,7 +12812,7 @@ def _(rid, params: dict) -> dict:
     new_session = bool(cfg.get("start_new_session", True))
 
     def _on_detect() -> None:
-        from tools.wake_word import get_last_match, owns_listener, pause_listening
+        from tools.wake_word import get_last_match, owns_listener, pause_listening, wake_voice_for_phrase
 
         if not pause_listening(owner=transport):
             return
@@ -12826,6 +12826,7 @@ def _(rid, params: dict) -> dict:
         # back to the owner's configured phrase / no profile for
         # single-phrase engines.
         matched_phrase, matched_profile = get_last_match() or (phrase, "")
+        matched_voice = wake_voice_for_phrase(cfg, matched_phrase or phrase)
         logger.info("wake.detected: emitting to sid=%r (transport=%s, profile=%r)",
                     sid, type(transport).__name__, matched_profile)
         token = bind_transport(transport)
@@ -12834,6 +12835,7 @@ def _(rid, params: dict) -> dict:
                 "phrase": matched_phrase or phrase,
                 "profile": matched_profile or None,
                 "start_new_session": new_session,
+                "voice": matched_voice,
             })
         finally:
             reset_transport(token)

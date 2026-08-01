@@ -60,6 +60,9 @@ _START_TIMEOUT_SECONDS = 5.0
 _DEFAULT_CONFIRMATION_FRAMES = 3
 _DEFAULT_BENAIAH_PHRASE = "benaiah"
 _LEGACY_BENAIAH_PHRASE = "hey benaiah"
+_DEFAULT_BENAIAH_VOICE = "en-GB-RyanNeural"
+_DEFAULT_SECONDARY_PHRASE = "sonya"
+_DEFAULT_SECONDARY_VOICE = "en-GB-SoniaNeural"
 
 # Dead-mic detection: an int16 stream whose peak stays at/below this for this
 # many consecutive seconds is flagged as silent. Desktop push-to-talk and the
@@ -85,6 +88,9 @@ _DEFAULTS: Dict[str, Any] = {
     # a separately trained openWakeWord model. openwakeword/sherpa remain available.
     "provider": "stt",
     "phrase": "benaiah",
+    "voice": _DEFAULT_BENAIAH_VOICE,
+    "secondary_phrase": _DEFAULT_SECONDARY_PHRASE,
+    "secondary_voice": _DEFAULT_SECONDARY_VOICE,
     "sensitivity": 0.5,
     "confirmation_frames": _DEFAULT_CONFIRMATION_FRAMES,
     "start_new_session": True,
@@ -107,6 +113,10 @@ _PHRASE_ALIASES = {
         "a benaya",
         "a benaiah",
         "ben i a",
+    ),
+    "sonya": (
+        "sonia",
+        "sony a",
     ),
 }
 
@@ -283,6 +293,35 @@ def wake_phrase(cfg: Optional[Dict[str, Any]] = None) -> str:
     return phrase or _DEFAULT_BENAIAH_PHRASE
 
 
+def wake_routes(cfg: Optional[Dict[str, Any]] = None) -> list[Dict[str, str]]:
+    """Ordered wake phrases and the voice each phrase selects.
+
+    ``phrase`` remains the user-customizable primary name. The secondary name
+    is independent, so changing the primary never removes the Sonya route.
+    Empty secondary values deliberately disable that route.
+    """
+    cfg = cfg if cfg is not None else load_wake_word_config()
+    primary = {
+        "phrase": wake_phrase(cfg),
+        "voice": str(_get(cfg, "voice") or _DEFAULT_BENAIAH_VOICE).strip(),
+    }
+    secondary_phrase = str(_get(cfg, "secondary_phrase") or "").strip()
+    secondary_voice = str(_get(cfg, "secondary_voice") or "").strip()
+    routes = [primary]
+    if secondary_phrase and _normalize_phrase_text(secondary_phrase) != _normalize_phrase_text(primary["phrase"]):
+        routes.append({"phrase": secondary_phrase, "voice": secondary_voice})
+    return routes
+
+
+def wake_voice_for_phrase(cfg: Dict[str, Any], phrase: str) -> Optional[str]:
+    """Return the per-conversation voice selected by a detected phrase."""
+    normalized = _normalize_phrase_text(phrase)
+    for route in wake_routes(cfg):
+        if _normalize_phrase_text(route["phrase"]) == normalized:
+            return route["voice"] or None
+    return None
+
+
 def wake_surface_enabled(surface: str, cfg: Optional[Dict[str, Any]] = None) -> bool:
     """Should ``surface`` (``cli`` / ``tui`` / ``gui``) host the listener?
 
@@ -438,9 +477,9 @@ class _Engine:
     frame_length: int = 1280  # 80 ms at 16 kHz
 
     #: Optional (matched phrase, profile name) of the most recent fire.
-    #: Multi-phrase engines (sherpa) set this for profile routing; the
-    #: single-phrase engines leave it None (callers fall back to the
-    #: configured phrase / active profile).
+    #: Multi-phrase engines set this for voice/profile routing; engines that
+    #: cannot identify the matching phrase leave it None (callers fall back to
+    #: the configured primary phrase / active profile).
     last_match: Optional[tuple[str, str]] = None
 
     def process(self, frame) -> bool:  # frame: 1-D int16 ndarray
@@ -622,9 +661,9 @@ class _SherpaKwsEngine(_Engine):
         # on — every other wake-enabled profile's phrase, so ONE listener can
         # wake any profile ("hey hermes" / "hey coder" / ...). display-name →
         # profile is kept for routing the match back.
-        phrase = wake_phrase(cfg)
+        routes = wake_routes(cfg)
         own_profile = _active_profile_name()
-        phrase_map: Dict[str, str] = {phrase: own_profile}
+        phrase_map: Dict[str, str] = {route["phrase"]: own_profile for route in routes}
         if bool(cfg.get("profile_routing", True)):
             for prof, p in enrolled_profile_phrases().items():
                 phrase_map.setdefault(p.strip(), prof)
@@ -801,7 +840,8 @@ class _SttPhraseEngine(_Engine):
                 "Wake word provider 'stt' needs speech-to-text configured "
                 "(config.yaml stt.provider, usually local)."
             )
-        self._phrase = wake_phrase(cfg)
+        self._routes = wake_routes(cfg)
+        self.last_match: Optional[tuple[str, str]] = None
         # Map shared sensitivity (higher=stricter) onto an int16 peak gate.
         # 0.5 → ~380. Speech is collected until a short trailing silence so
         # a one-word wake name is never transcribed halfway through the word.
@@ -869,7 +909,7 @@ class _SttPhraseEngine(_Engine):
             # transcription and the user's global STT prompt stay untouched.
             result = transcribe_audio(
                 wav_path,
-                initial_prompt=f"Wake name: {self._phrase}.",
+                initial_prompt="Wake names: " + ", ".join(route["phrase"] for route in self._routes) + ".",
             )
             transcript = str((result or {}).get("transcript") or "")
             if not result or not result.get("success"):
@@ -879,14 +919,17 @@ class _SttPhraseEngine(_Engine):
                     (result or {}).get("error") or "no result",
                 )
                 return False
-            if _phrase_matched(transcript, self._phrase):
-                logger.info("wake word: STT matched %r via %r", self._phrase, transcript)
-                return True
+            for route in self._routes:
+                phrase = route["phrase"]
+                if _phrase_matched(transcript, phrase):
+                    self.last_match = (phrase, "")
+                    logger.info("wake word: STT matched %r via %r", phrase, transcript)
+                    return True
             if transcript.strip():
                 logger.info(
                     "wake word: STT heard %r (no match for %r)",
                     transcript,
-                    self._phrase,
+                    [route["phrase"] for route in self._routes],
                 )
         except Exception as exc:
             logger.warning("wake word: STT probe failed: %s", exc)
@@ -904,6 +947,7 @@ class _SttPhraseEngine(_Engine):
             self._speech_active = False
             self._speech_samples = 0
             self._silence_samples = 0
+            self.last_match = None
 
     def close(self) -> None:
         self.reset()

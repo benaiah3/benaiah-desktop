@@ -53,6 +53,27 @@ def test_benaiah_phrase_is_used_verbatim():
     assert wake.wake_phrase({"phrase": "computer"}) == "computer"
 
 
+def test_dual_wake_routes_preserve_custom_primary_and_select_distinct_voices():
+    config = {
+        "phrase": "computer",
+        "voice": "en-GB-RyanNeural",
+        "secondary_phrase": "sonya",
+        "secondary_voice": "en-GB-SoniaNeural",
+    }
+
+    assert wake.wake_routes(config) == [
+        {"phrase": "computer", "voice": "en-GB-RyanNeural"},
+        {"phrase": "sonya", "voice": "en-GB-SoniaNeural"},
+    ]
+    assert wake.wake_voice_for_phrase(config, "Sonya") == "en-GB-SoniaNeural"
+    assert wake._phrase_matched("Sonia, check my calendar", "sonya")
+
+
+def test_empty_secondary_phrase_disables_second_route():
+    routes = wake.wake_routes({"phrase": "benaiah", "secondary_phrase": ""})
+    assert routes == [{"phrase": "benaiah", "voice": "en-GB-RyanNeural"}]
+
+
 def test_legacy_benaiah_default_is_shortened_for_existing_installations(monkeypatch):
     persisted = {"enabled": True, "provider": "stt", "phrase": "hey benaiah"}
     monkeypatch.setattr("hermes_cli.config.load_config", lambda: {"wake_word": persisted})
@@ -87,7 +108,26 @@ def test_stt_spotter_waits_for_one_word_to_end_before_transcribing(monkeypatch):
     assert engine.process(silence) is False
     assert engine.process(silence) is True
     assert len(calls) == 1
-    assert calls[0][1] == {"initial_prompt": "Wake name: benaiah."}
+    assert calls[0][1] == {"initial_prompt": "Wake names: benaiah, sonya."}
+    assert engine.last_match == ("benaiah", "")
+
+
+def test_stt_spotter_matches_secondary_wake_name(monkeypatch):
+    np = pytest.importorskip("numpy")
+    monkeypatch.setattr(wake, "_stt_ready", lambda: True)
+    monkeypatch.setattr(
+        "tools.transcription_tools.transcribe_audio",
+        lambda _path, **_kwargs: {"success": True, "transcript": "Sonia"},
+    )
+    engine = wake._SttPhraseEngine({"phrase": "benaiah", "sensitivity": 0.5})
+    speech = np.full(engine.frame_length, 800, dtype=np.int16)
+    silence = np.zeros(engine.frame_length, dtype=np.int16)
+
+    assert engine.process(speech) is False
+    assert engine.process(silence) is False
+    assert engine.process(silence) is False
+    assert engine.process(silence) is True
+    assert engine.last_match == ("sonya", "")
 
 
 def test_stt_spotter_does_not_transcribe_ambient_silence(monkeypatch):

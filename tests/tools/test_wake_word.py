@@ -38,6 +38,10 @@ def test_config_defaults_and_clamping():
     assert ww._sensitivity({}) == ww._DEFAULTS["sensitivity"]
     assert ww.wake_phrase({"phrase": "hey hermes"}) == "hey hermes"
     assert ww.wake_phrase({}) == "benaiah"
+    assert ww.wake_routes({}) == [
+        {"phrase": "benaiah", "voice": "en-GB-RyanNeural"},
+        {"phrase": "sonya", "voice": "en-GB-SoniaNeural"},
+    ]
 
 
 def test_wake_surface_enabled_gate():

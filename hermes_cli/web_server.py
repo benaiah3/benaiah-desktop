@@ -4403,7 +4403,7 @@ async def speak_text(payload: TTSSpeakRequest, profile: Optional[str] = None):
             # resolution, so the task-local override inside this worker
             # thread is sufficient (same reasoning as the MCP probe scope).
             with _config_profile_scope(profile):
-                return text_to_speech_tool(text)
+                return text_to_speech_tool(text, voice=payload.voice)
 
         loop = asyncio.get_running_loop()
         result_json = await loop.run_in_executor(None, _speak_scoped)
@@ -4518,6 +4518,7 @@ async def speak_stream_ws(ws: "WebSocket") -> None:
     # the dashboard's own. The streamer captures its config at resolve time,
     # so scoping resolution scopes the whole session.
     profile = (ws.query_params.get("profile") or "").strip() or None
+    voice = (ws.query_params.get("voice") or "").strip() or None
 
     loop = asyncio.get_running_loop()
 
@@ -4527,6 +4528,11 @@ async def speak_stream_ws(ws: "WebSocket") -> None:
 
         with _config_profile_scope(profile):
             cfg = _load_tts_config()
+            if voice:
+                cfg = dict(cfg)
+                edge_cfg = dict(cfg.get("edge") or {})
+                edge_cfg["voice"] = voice
+                cfg["edge"] = edge_cfg
             streamer = resolve_streaming_provider(cfg)
             cap = _resolve_max_text_length(_get_provider(cfg), cfg) if streamer else 0
         return streamer, cap
