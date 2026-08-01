@@ -73,15 +73,31 @@ if (process.platform === "darwin" && !childEnv.CSC_KEYCHAIN) {
   }
 }
 
-if (dist && fs.existsSync(distBinary(dist))) {
+const passthrough = process.argv.slice(2)
+const targetingWin =
+  passthrough.includes("--win") ||
+  passthrough.some((arg) => arg === "win" || arg.startsWith("win:"))
+// macOS Electron.app dist must not be injected when packaging Windows —
+// electron-builder renames the wrong binary and the win build fails.
+const useLocalDist =
+  dist &&
+  fs.existsSync(distBinary(dist)) &&
+  !(process.platform === "darwin" && targetingWin)
+
+if (useLocalDist) {
   args.push(`-c.electronDist=${dist}`)
+} else if (targetingWin && process.platform === "darwin") {
+  console.warn(
+    "[run-electron-builder] skipping local mac electronDist for --win; " +
+      "electron-builder will fetch the Windows Electron runtime."
+  )
 } else {
   console.warn(
     "[run-electron-builder] no local electron dist; electron-builder will fetch " +
       "via @electron/get (electronVersion + ELECTRON_MIRROR)."
   )
 }
-args.push(...process.argv.slice(2))
+args.push(...passthrough)
 
 const result = spawnSync(process.execPath, [electronBuilderCli(), ...args], {
   env: childEnv,

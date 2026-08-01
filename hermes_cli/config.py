@@ -937,7 +937,7 @@ from hermes_cli.config_defaults import DEFAULT_CONFIG, OPTIONAL_ENV_VARS  # noqa
 # Benaiah white-label wake defaults; upstream owns the full schema in config_defaults.
 _wake_word_defaults = DEFAULT_CONFIG.get("wake_word")
 if isinstance(_wake_word_defaults, dict):
-    _wake_word_defaults.update({"provider": "stt", "phrase": "hey benaiah"})
+    _wake_word_defaults.update({"provider": "stt", "phrase": "benaiah"})
 
 # =============================================================================
 # Config Migration System

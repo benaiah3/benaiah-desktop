@@ -13,7 +13,7 @@ def test_benaiah_defaults_use_stt_phrase_spotting(monkeypatch):
                 "enabled": False,
                 "surface": "gui",
                 "provider": "stt",
-                "phrase": "hey benaiah",
+                "phrase": "benaiah",
                 "start_new_session": True,
             }
         },
@@ -21,14 +21,16 @@ def test_benaiah_defaults_use_stt_phrase_spotting(monkeypatch):
     config = wake.load_wake_word_config()
     assert config["enabled"] is False
     assert config["provider"] == "stt"
-    assert wake.wake_phrase(config) == "hey benaiah"
+    assert wake.wake_phrase(config) == "benaiah"
     assert config["start_new_session"] is True
-    assert wake._phrase_matched("Hey, Benaya.", "hey benaiah")
-    assert wake._phrase_matched("Hey, Beniah.", "hey benaiah")
-    assert wake._phrase_matched("Hey, Bonita.", "hey benaiah")
-    assert wake._phrase_matched("hey benita", "hey benaiah")
-    assert wake._phrase_matched("hey benaiah open gmail", "hey benaiah")
-    assert not wake._phrase_matched("play some music", "hey benaiah")
+    assert wake._phrase_matched("Benaiah.", "benaiah")
+    assert wake._phrase_matched("Benaya.", "benaiah")
+    assert wake._phrase_matched("Beniah.", "benaiah")
+    assert wake._phrase_matched("Bonita.", "benaiah")
+    assert wake._phrase_matched("Benaiah open Gmail", "benaiah")
+    assert wake._phrase_matched("Hey Benaiah open Gmail", "benaiah")
+    assert not wake._phrase_matched("hey", "benaiah")
+    assert not wake._phrase_matched("play some music", "benaiah")
     assert (Path(__file__).resolve().parents[2] / "tools" / "wakewords" / "hey_hermes.tflite").is_file()
     assert (Path(__file__).resolve().parents[2] / "tools" / "wakewords" / "hey_hermes.onnx").is_file()
 
@@ -46,7 +48,18 @@ def test_sensitivity_is_safely_clamped():
 
 
 def test_benaiah_phrase_is_used_verbatim():
-    assert wake.wake_phrase({"phrase": "hey benaiah"}) == "hey benaiah"
+    assert wake.wake_phrase({"phrase": "computer"}) == "computer"
+
+
+def test_legacy_benaiah_default_is_shortened_for_existing_installations(monkeypatch):
+    persisted = {"enabled": True, "provider": "stt", "phrase": "hey benaiah"}
+    monkeypatch.setattr("hermes_cli.config.load_config", lambda: {"wake_word": persisted})
+
+    effective = wake.load_wake_word_config()
+
+    assert effective["phrase"] == "benaiah"
+    assert wake.wake_phrase(persisted) == "benaiah"
+    assert persisted["phrase"] == "hey benaiah"
 
 
 def test_disabled_wake_never_claims_a_surface():
