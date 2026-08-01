@@ -293,6 +293,7 @@ export const ar = defineLocale({
       providerAccounts: 'الحسابات',
       providerApiKeys: 'مفاتيح API',
       gateway: 'البوابة',
+      remote: 'الوصول عن بُعد',
       apiKeys: 'الأدوات والمفاتيح',
       keysTools: 'الأدوات',
       keysSettings: 'الإعدادات',

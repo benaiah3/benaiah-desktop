@@ -16,6 +16,7 @@ import {
   Keyboard,
   KeyRound,
   Package,
+  QrCode,
   RefreshCw,
   Settings2,
   Upload,
@@ -207,6 +208,13 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         id: 'gateway',
         label: t.settings.nav.gateway,
         onSelect: () => setActiveView('gateway')
+      },
+      {
+        active: activeView === 'remote',
+        icon: QrCode,
+        id: 'remote',
+        label: t.settings.nav.remote,
+        onSelect: () => setActiveView('remote')
       },
       {
         active: activeView === 'keybinds',

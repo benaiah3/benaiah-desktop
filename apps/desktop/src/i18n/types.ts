@@ -292,6 +292,7 @@ export interface Translations {
       providerApiKeys: string
       providerCustomEndpoints: string
       gateway: string
+      remote: string
       apiKeys: string
       keybinds: string
       keysTools: string

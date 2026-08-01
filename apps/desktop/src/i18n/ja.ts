@@ -228,6 +228,7 @@ export const ja = defineLocale({
       providerApiKeys: 'API キー',
       providerCustomEndpoints: 'カスタムエンドポイント',
       gateway: 'ゲートウェイ',
+      remote: 'リモート',
       apiKeys: 'ツールとキー',
       keybinds: 'キーボードショートカット',
       keysTools: 'ツール',

@@ -340,6 +340,7 @@ export const en: Translations = {
       providerApiKeys: 'API keys',
       providerCustomEndpoints: 'Custom Endpoints',
       gateway: 'Gateway',
+      remote: 'Remote',
       apiKeys: 'Tools & Keys',
       keybinds: 'Keyboard Shortcuts',
       keysTools: 'Tools',

@@ -2427,6 +2427,30 @@ function emitUpdateProgress(payload) {
 
 let releaseUpdaterController = null
 
+function releaseUpdateConfigPath() {
+  const bundled = path.join(process.resourcesPath, 'app-update.yml')
+
+  if (fileExists(bundled)) {
+    return bundled
+  }
+
+  const fallback = path.join(app.getPath('userData'), 'app-update.yml')
+
+  const config = [
+    'owner: benaiah3',
+    'repo: benaiah-desktop',
+    'provider: github',
+    'releaseType: release',
+    'updaterCacheDirName: benaiah-desktop-updater',
+    ''
+  ].join('\n')
+
+  fs.writeFileSync(fallback, config, { encoding: 'utf8', mode: 0o600 })
+  rememberLog(`[release-updater] restored missing app-update.yml at ${fallback}`)
+
+  return fallback
+}
+
 function getReleaseUpdaterController() {
   releaseUpdaterController ??= createReleaseUpdaterController({
     currentVersion: () => app.getVersion(),
@@ -2438,6 +2462,7 @@ function getReleaseUpdaterController() {
       })
     },
     log: rememberLog,
+    updateConfigPath: releaseUpdateConfigPath(),
     updater: signedReleaseUpdater
   })
 
