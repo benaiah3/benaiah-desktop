@@ -158,12 +158,15 @@ export interface SpeechStreamSession {
   /** No more text coming — resolves `done` once the audio drains. */
   finish: () => void
   /**
-   * 'done'    — audio fully played (or barged via stopVoicePlayback)
-   * 'fallback'— no audio ever produced; caller should speak the accumulated
-   *             text through `playSpeechText` instead.
+   * 'done'     — audio fully played.
+   * 'fallback' — no audio ever produced; caller should speak the accumulated
+   *              text through `playSpeechText` instead.
+   * 'cancelled'— explicitly stopped; never start a fallback for this session.
    */
-  done: Promise<'done' | 'fallback'>
+  done: Promise<SpeechStreamOutcome>
 }
+
+export type SpeechStreamOutcome = 'cancelled' | 'done' | 'fallback'
 
 /**
  * Open a live speech session: one WebSocket + one AudioContext for a whole
@@ -184,16 +187,20 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
   let finished = false
   const pendingSends: string[] = []
 
-  let settle: (value: 'done' | 'fallback') => void = () => undefined
+  let settle: (value: SpeechStreamOutcome) => void = () => undefined
+  let stopCurrent: () => void = () => undefined
 
-  const done = new Promise<'done' | 'fallback'>(resolve => {
+  const done = new Promise<SpeechStreamOutcome>(resolve => {
     settle = value => {
       if (settled) {
         return
       }
 
       settled = true
-      currentStop = null
+
+      if (currentStop === stopCurrent) {
+        currentStop = null
+      }
 
       try {
         ws.close()
@@ -219,7 +226,8 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
 
   // stopVoicePlayback() → immediate barge-in: kill the socket (the server
   // aborts synthesis on disconnect) and the audio context (cuts sound now).
-  currentStop = () => settle('done')
+  stopCurrent = () => settle('cancelled')
+  currentStop = stopCurrent
 
   const finishWhenDrained = () => {
     const remainingMs = context ? Math.max(0, nextStartAt - context.currentTime) * 1_000 : 0
@@ -352,12 +360,13 @@ export async function startSpeechStream(options: VoicePlaybackOptions): Promise<
   }
 
   stopVoicePlayback()
+  const ownSequence = sequence
   setVoicePlaybackState(currentState('preparing', options))
 
   const session = openSpeechStream(wsUrl, options)
 
   void session.done.then(outcome => {
-    if (outcome === 'done') {
+    if (outcome === 'done' && sequence === ownSequence) {
       setVoicePlaybackState(currentState('idle'))
     }
   })
@@ -366,12 +375,16 @@ export async function startSpeechStream(options: VoicePlaybackOptions): Promise<
 }
 
 /** One-shot playback of complete text over the streaming WS. */
-function playSpeechStream(wsUrl: string, text: string, options: VoicePlaybackOptions): Promise<'fallback' | 'played'> {
+function playSpeechStream(
+  wsUrl: string,
+  text: string,
+  options: VoicePlaybackOptions
+): Promise<'cancelled' | 'fallback' | 'played'> {
   const session = openSpeechStream(wsUrl, options)
   session.append(text)
   session.finish()
 
-  return session.done.then(outcome => (outcome === 'done' ? 'played' : 'fallback'))
+  return session.done.then(outcome => (outcome === 'done' ? 'played' : outcome))
 }
 
 async function playSpeechDataUrl(
@@ -488,6 +501,10 @@ export async function playSpeechText(text: string, options: VoicePlaybackOptions
         setVoicePlaybackState(currentState('idle'))
 
         return true
+      }
+
+      if (outcome === 'cancelled') {
+        return false
       }
     }
 

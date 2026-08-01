@@ -381,12 +381,12 @@ export function useVoiceConversation({
     }
 
     stopBargeMonitorRef.current = monitorSpeechDuringPlayback({
-      // The thinking cue is app-generated speaker output too. Without marking
-      // it as playback, the VAD applies its quiet-room threshold and hears the
-      // cue through the mic as a user barge, cancelling TTS before audio starts.
-      // The playback threshold still admits nearby speech while filtering the
-      // app's own soft blips.
-      isPlaying: () => $voicePlayback.get().status === 'speaking' || isThinkingSoundActive(),
+      // Every app-audio phase is echo-prone, including the preparation gap
+      // between the thinking cue and the first TTS frame. If `preparing` falls
+      // back to the quiet-room threshold, ambient/speaker residue can cancel
+      // the session before synthesis is even requested. The playback threshold
+      // still admits nearby speech while filtering the app's own soft blips.
+      isPlaying: () => $voicePlayback.get().status !== 'idle' || isThinkingSoundActive(),
       onSpeech: () => {
         bargeCapturePendingRef.current = true
         bargedRef.current = true

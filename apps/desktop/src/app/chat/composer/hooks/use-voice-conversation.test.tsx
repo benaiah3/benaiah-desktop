@@ -2,6 +2,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BargeMonitorCallbacks } from '@/lib/voice-barge-in'
+import { setVoicePlaybackState } from '@/store/voice-playback'
 
 import type { MicRecording } from './use-mic-recorder'
 import { useVoiceConversation } from './use-voice-conversation'
@@ -144,6 +145,7 @@ describe('useVoiceConversation full-duplex barge-in', () => {
     vi.clearAllMocks()
     micHandle.start.mockResolvedValue(undefined)
     micHandle.stop.mockResolvedValue(null)
+    setVoicePlaybackState({ audioElement: null, messageId: null, sequence: 0, source: null, status: 'idle' })
   })
 
   afterEach(cleanup)
@@ -172,6 +174,28 @@ describe('useVoiceConversation full-duplex barge-in', () => {
 
     thinkingSoundActive = true
     expect(monitor?.isPlaying?.()).toBe(true)
+  })
+
+  it('keeps the echo-safe threshold through the TTS preparation gap', async () => {
+    const { hook } = renderConversation()
+
+    await enterThinking(hook)
+    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+
+    const monitor = monitorCalls.at(-1)
+    thinkingSoundActive = false
+    setVoicePlaybackState({
+      audioElement: null,
+      messageId: 'reply-1',
+      sequence: 1,
+      source: 'voice-conversation',
+      status: 'preparing'
+    })
+
+    expect(monitor?.isPlaying?.()).toBe(true)
+
+    setVoicePlaybackState({ audioElement: null, messageId: null, sequence: 1, source: null, status: 'idle' })
+    expect(monitor?.isPlaying?.()).toBe(false)
   })
 
   it('interrupts the in-flight turn when speech trips mid-generation', async () => {
