@@ -326,12 +326,13 @@ function WakeWordButton({ disabled, pausedForVoice = false }: { disabled: boolea
   const c = t.composer
   const wake = useStore($wakeWord)
   const phrase = wake.phrase || 'benaiah'
+  const secondaryPhrase = wake.secondaryPhrase
 
   const label = pausedForVoice
-    ? c.wakeWordPausedVoice(phrase)
+    ? c.wakeWordPausedVoice(phrase, secondaryPhrase)
     : wake.listening
-      ? c.wakeWordListening(phrase)
-      : c.wakeWordOff(phrase)
+      ? c.wakeWordListening(phrase, secondaryPhrase)
+      : c.wakeWordOff(phrase, secondaryPhrase)
 
   const tooltip = !pausedForVoice && wake.notice ? `${label} — ${wake.notice}` : label
 

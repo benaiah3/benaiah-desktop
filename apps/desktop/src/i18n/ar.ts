@@ -1661,9 +1661,11 @@ export const ar = defineLocale({
     newSessionPlaceholders: ['اسأل Benaiah عن شيء...', 'اطلب من Benaiah تنفيذ مهمة...', 'ابدأ محادثة جديدة...'],
     followUpPlaceholders: ['اكتب متابعة...', 'أضف توجيها...', 'اسأل سؤالا آخر...'],
     startVoice: 'بدء الصوت',
-    wakeWordListening: phrase => `جارٍ الاستماع لعبارة «${phrase}»`,
-    wakeWordOff: phrase => `تشغيل «${phrase}»`,
-    wakeWordPausedVoice: phrase => `تتوقف «${phrase}» مؤقتًا أثناء المحادثات الصوتية`,
+    wakeWordListening: (phrase, secondaryPhrase) =>
+      `جارٍ الاستماع لعبارة «${phrase}»${secondaryPhrase ? ` أو «${secondaryPhrase}»` : ''}`,
+    wakeWordOff: (phrase, secondaryPhrase) => `تشغيل «${phrase}»${secondaryPhrase ? ` أو «${secondaryPhrase}»` : ''}`,
+    wakeWordPausedVoice: (phrase, secondaryPhrase) =>
+      `تتوقف «${phrase}»${secondaryPhrase ? ` أو «${secondaryPhrase}»` : ''} مؤقتًا أثناء المحادثات الصوتية`,
     queueMessage: 'إضافة الرسالة للطابور',
     steer: 'توجيه',
     stop: 'إيقاف',

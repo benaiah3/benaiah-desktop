@@ -74,6 +74,11 @@ def test_empty_secondary_phrase_disables_second_route():
     assert routes == [{"phrase": "benaiah", "voice": "en-GB-RyanNeural"}]
 
 
+def test_duplicate_secondary_phrase_is_not_repeated():
+    routes = wake.wake_routes({"phrase": "Smith", "secondary_phrase": "smith"})
+    assert routes == [{"phrase": "Smith", "voice": "en-GB-RyanNeural"}]
+
+
 def test_legacy_benaiah_default_is_shortened_for_existing_installations(monkeypatch):
     persisted = {"enabled": True, "provider": "stt", "phrase": "hey benaiah"}
     monkeypatch.setattr("hermes_cli.config.load_config", lambda: {"wake_word": persisted})
