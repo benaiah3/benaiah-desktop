@@ -135,3 +135,31 @@ describe('ConfigField searchable routing', () => {
     expect(onChange).toHaveBeenCalledWith('')
   })
 })
+
+describe('ConfigField public toolset labels', () => {
+  const toolsetSchema: ConfigFieldSchema = { type: 'list' }
+
+  it('shows the Benaiah brand without exposing the internal CLI identifier', () => {
+    render(<ConfigField onChange={vi.fn()} schema={toolsetSchema} schemaKey="toolsets" value={['hermes-cli']} />)
+
+    expect(screen.getByDisplayValue('Benaiah')).not.toBeNull()
+    expect(screen.queryByDisplayValue('hermes-cli')).toBeNull()
+  })
+
+  it('maps the public label back to the stable runtime identifier when edited', () => {
+    const onChange = vi.fn()
+
+    render(
+      <ConfigField
+        onChange={onChange}
+        schema={toolsetSchema}
+        schemaKey="toolsets"
+        value={['hermes-cli', 'spotify']}
+      />
+    )
+
+    fireEvent.change(screen.getByDisplayValue('Benaiah, spotify'), { target: { value: 'Benaiah, browser' } })
+
+    expect(onChange).toHaveBeenLastCalledWith(['hermes-cli', 'browser'])
+  })
+})
