@@ -1773,6 +1773,9 @@ def test_wake_status_reports_configured_input_device_and_windows_silence_hint(mo
         "enabled": True,
         "phrase": "hey hermes",
         "secondary_phrase": "sonya",
+        "voice": "en-GB-RyanNeural",
+        "secondary_voice": "en-GB-SoniaNeural",
+        "start_new_session": True,
         "provider": "openwakeword",
         "surface": "gui",
         "input_device": "Microphone Array",
@@ -1815,6 +1818,11 @@ def test_wake_status_reports_configured_input_device_and_windows_silence_hint(mo
         )
         assert response["result"]["configured_surface"] == "gui"
         assert response["result"]["secondary_phrase"] == "sonya"
+        assert response["result"]["routes"] == [
+            {"phrase": "hey hermes", "voice": "en-GB-RyanNeural"},
+            {"phrase": "sonya", "voice": "en-GB-SoniaNeural"},
+        ]
+        assert response["result"]["start_new_session"] is True
         assert response["result"]["input_device"] == device
         assert response["result"]["audio_silent"] is True
         assert response["result"]["hint"] == (

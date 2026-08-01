@@ -13019,6 +13019,10 @@ def _(rid, params: dict) -> dict:
             "owner_surface": owner_surface if owner is not None else None,
             "phrase": reqs["phrase"],
             "secondary_phrase": secondary_phrase,
+            # Route metadata lets paired remotes mirror the configured names
+            # and voices without maintaining a second source of truth.
+            "routes": routes,
+            "start_new_session": bool(cfg.get("start_new_session", True)),
             "provider": reqs["provider"],
             "configured_surface": str(cfg.get("surface") or "auto"),
             "input_device": input_device,
