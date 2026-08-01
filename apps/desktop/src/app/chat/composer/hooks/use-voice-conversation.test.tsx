@@ -26,12 +26,21 @@ vi.mock('@/lib/voice-barge-in', () => ({
 }))
 
 const markVoicePlaybackInterrupted = vi.fn()
+const playSpeechText = vi.fn(async (_text: string, _options: { source: string }) => true)
+
+const startSpeechStream = vi.fn(
+  async (
+    _options: { source: string }
+  ): Promise<null | { append: (text: string) => void; done: Promise<'fallback'>; finish: () => void }> => null
+)
+
 const stopVoicePlayback = vi.fn()
 
 vi.mock('@/lib/voice-playback', () => ({
+  consumeUserStopRequested: vi.fn(() => false),
   markVoicePlaybackInterrupted: () => markVoicePlaybackInterrupted(),
-  playSpeechText: vi.fn(async () => true),
-  startSpeechStream: vi.fn(async () => null),
+  playSpeechText: (text: string, options: { source: string }) => playSpeechText(text, options),
+  startSpeechStream: (options: { source: string }) => startSpeechStream(options),
   stopVoicePlayback: () => stopVoicePlayback()
 }))
 
@@ -79,7 +88,13 @@ interface HookProps {
   busy: boolean
 }
 
-function renderConversation(overrides: { onInterrupt?: () => void; transcript?: string } = {}) {
+function renderConversation(
+  overrides: {
+    onInterrupt?: () => void
+    pendingResponse?: () => { id: string; pending: boolean; text: string } | null
+    transcript?: string
+  } = {}
+) {
   const onInterrupt = overrides.onInterrupt ?? vi.fn()
 
   // Mirrors the real app: submitting a turn makes the agent busy.
@@ -109,7 +124,7 @@ function renderConversation(overrides: { onInterrupt?: () => void; transcript?: 
         onStopWord,
         onSubmit,
         onTranscribeAudio,
-        pendingResponse: () => null
+        pendingResponse: overrides.pendingResponse ?? (() => null)
       }),
     { initialProps: { busy: false } }
   )
@@ -196,6 +211,41 @@ describe('useVoiceConversation full-duplex barge-in', () => {
 
     setVoicePlaybackState({ audioElement: null, messageId: null, sequence: 1, source: null, status: 'idle' })
     expect(monitor?.isPlaying?.()).toBe(false)
+  })
+
+  it('speaks a fallback reply after a tool turn replaces its interim message id', async () => {
+    let response: { id: string; pending: boolean; text: string } | null = null
+    startSpeechStream.mockResolvedValueOnce({
+      append: vi.fn(),
+      done: Promise.resolve('fallback'),
+      finish: vi.fn()
+    })
+    const { hook } = renderConversation({ pendingResponse: () => response })
+
+    await enterThinking(hook)
+
+    // The tool narration opens the speech path, whose provider reports that
+    // it needs whole-text fallback on this machine.
+    response = { id: 'interim', pending: true, text: 'Let me check that.' }
+    hook.rerender({ busy: true })
+    await waitFor(() => expect(startSpeechStream).toHaveBeenCalled())
+
+    // Reconciliation briefly removes the interim bubble while generation is
+    // still active. The old poll exited here and never called TTS.
+    response = null
+    await new Promise(resolve => window.setTimeout(resolve, 300))
+    expect(playSpeechText).not.toHaveBeenCalled()
+
+    // The authoritative final bubble has a different message id. It is still
+    // the same logical turn and must be spoken.
+    response = { id: 'final', pending: false, text: 'Today is Saturday, the first of August.' }
+    hook.rerender({ busy: false })
+
+    await waitFor(() =>
+      expect(playSpeechText).toHaveBeenCalledWith('Today is Saturday, the first of August.', {
+        source: 'voice-conversation'
+      })
+    )
   })
 
   it('interrupts the in-flight turn when speech trips mid-generation', async () => {

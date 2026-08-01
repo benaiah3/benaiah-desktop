@@ -418,7 +418,7 @@ export function useVoiceConversation({
 
       const response = pendingResponse()
 
-      if (response && response.id === responseId) {
+      if (response) {
         if (response.text.length > spokenSourceLengthRef.current) {
           session.append(response.text.slice(spokenSourceLengthRef.current))
           spokenSourceLengthRef.current = response.text.length
@@ -445,14 +445,19 @@ export function useVoiceConversation({
 
         const response = pendingResponse()
 
-        if (!response || response.id !== responseId) {
-          settleAfterSpeech(false)
+        // A tool turn can temporarily remove/replace its interim assistant
+        // bubble while the final bubble is committed. Follow the logical turn
+        // through that transition: `busy` is authoritative while generation
+        // is active, and a changed message id is normal UI reconciliation —
+        // neither means the spoken reply vanished.
+        if (busyRef.current || response?.pending) {
+          window.setTimeout(poll, 250)
 
           return
         }
 
-        if (response.pending || busyRef.current) {
-          window.setTimeout(poll, 250)
+        if (!response) {
+          settleAfterSpeech(false)
 
           return
         }
