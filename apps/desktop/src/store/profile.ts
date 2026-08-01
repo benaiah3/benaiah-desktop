@@ -159,8 +159,10 @@ export const $newChatProfile = atom<string | null>(null)
 // currently-open session (store/projects). The chat controller subscribes and
 // resets to the intro draft, so we never strand the user in an orphaned view.
 export const $freshSessionRequest = atom(0)
+export const $freshSessionConversationIdentity = atom<string | null>(null)
 
-export function requestFreshSession(): void {
+export function requestFreshSession(conversationIdentity: null | string = null): void {
+  $freshSessionConversationIdentity.set(conversationIdentity?.trim() || null)
   $freshSessionRequest.set($freshSessionRequest.get() + 1)
 }
 
@@ -354,10 +356,10 @@ export function selectProfile(name: string): void {
 // session list, where switching scope would throw away the browse state the user
 // is in. Points new chats at the profile and opens its backend so the next
 // message lands in the right place.
-export function newSessionInProfile(name: string): void {
+export function newSessionInProfile(name: string, conversationIdentity: null | string = null): void {
   const target = normalizeProfileKey(name)
   $newChatProfile.set(target)
-  requestFreshSession()
+  requestFreshSession(conversationIdentity)
   void ensureGatewayProfile(target)
 }
 

@@ -29,6 +29,7 @@ import {
   $currentProvider,
   $currentReasoningEffort,
   $messages,
+  $newChatConversationIdentity,
   $newChatWorkspaceTarget,
   $sessions,
   $yoloActive,
@@ -47,6 +48,7 @@ import {
   setFreshDraftReady,
   setIntroSeed,
   setMessages,
+  setNewChatConversationIdentity,
   setNewChatWorkspaceTarget,
   setResumeExhaustedSessionId,
   setResumeFailedSessionId,
@@ -157,7 +159,10 @@ function reconcileAuthoritativeMessages(
 // A no-op for single-profile/local-pooled users (a backend resolves its own launch
 // profile to None). The sticky UI model/effort/fast ride as per-session overrides,
 // never the profile default (that lives in Settings → Model).
-async function desktopSessionCreateParams(cwd: string): Promise<Record<string, unknown>> {
+async function desktopSessionCreateParams(
+  cwd: string,
+  conversationIdentity: null | string = null
+): Promise<Record<string, unknown>> {
   // Treat Send as the linearization point for the visible selector state. The
   // profile handshake below can yield long enough for background config/model
   // refreshes to finish; reading atoms afterward would silently create the
@@ -168,6 +173,8 @@ async function desktopSessionCreateParams(cwd: string): Promise<Record<string, u
     model: $currentModel.get().trim(),
     provider: $currentProvider.get().trim()
   }
+
+  const identity = conversationIdentity?.trim() || ''
 
   const profile = $newChatProfile.get() ?? normalizeProfileKey($activeGatewayProfile.get())
   await ensureGatewayProfile(profile)
@@ -181,11 +188,13 @@ async function desktopSessionCreateParams(cwd: string): Promise<Record<string, u
       ? { model: selection.model, ...(selection.provider ? { provider: selection.provider } : {}) }
       : {}),
     ...(selection.effort ? { reasoning_effort: selection.effort } : {}),
+    ...(identity ? { conversation_identity: identity } : {}),
     fast: selection.fast
   }
 }
 
 interface FreshSessionDraftOptions {
+  conversationIdentity?: null | string
   preserveRoute?: boolean
   replaceRoute?: boolean
   workspaceTarget?: NewChatWorkspaceTarget
@@ -283,6 +292,7 @@ export function useSessionActions({
       const draftOptions = typeof options === 'boolean' ? { replaceRoute: options } : options
       const preserveRoute = draftOptions.preserveRoute ?? false
       const replaceRoute = draftOptions.replaceRoute ?? false
+      const conversationIdentity = draftOptions.conversationIdentity?.trim() || null
 
       const hasWorkspaceTarget =
         Object.hasOwn(draftOptions, 'workspaceTarget') && draftOptions.workspaceTarget !== undefined
@@ -329,6 +339,7 @@ export function useSessionActions({
       setCurrentServiceTier('')
       setYoloActive(false)
       setNewChatWorkspaceTarget(hasWorkspaceTarget ? workspaceTarget : undefined)
+      setNewChatConversationIdentity(conversationIdentity)
 
       if (!hasWorkspaceTarget) {
         // In a project → the repo's default-branch checkout; not in a project →
@@ -367,8 +378,14 @@ export function useSessionActions({
               ? workspaceTarget.trim()
               : $currentCwd.get().trim() || resolveNewSessionCwd()
 
-        const params = await desktopSessionCreateParams(cwd)
+        const conversationIdentity = $newChatConversationIdentity.get()
+        const params = await desktopSessionCreateParams(cwd, conversationIdentity)
         const created = await requestGateway<SessionCreateResponse>('session.create', params)
+
+        if ($newChatConversationIdentity.get() === conversationIdentity) {
+          setNewChatConversationIdentity(null)
+        }
+
         const stored = created.stored_session_id ?? null
 
         // Only a genuine move to a DIFFERENT chat mid-create should orphan the

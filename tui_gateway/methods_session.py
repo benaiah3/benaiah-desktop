@@ -69,6 +69,9 @@ def _(rid, params: dict) -> dict:
         create_service_tier_override = (
             "priority" if is_truthy_value(params.get("fast")) else ""
         )
+    conversation_identity = _normalize_conversation_identity(
+        params.get("conversation_identity")
+    )
 
     ready = threading.Event()
     now = time.time()
@@ -96,6 +99,7 @@ def _(rid, params: dict) -> dict:
             "model_override": session_model_override,
             "create_reasoning_override": create_reasoning_override,
             "create_service_tier_override": create_service_tier_override,
+            "conversation_identity": conversation_identity or None,
             "parent_session_id": parent_session_id,
             "pending_title": title or None,
             "profile_home": str(profile_home) if profile_home is not None else None,
@@ -521,6 +525,7 @@ def _(rid, params: dict) -> dict:
             profile_home=profile_home,
             model_override=overrides.get("model_override"),
             resume_runtime_overrides=overrides or None,
+            conversation_identity=overrides.get("conversation_identity"),
         )
         if (live := _claim_or_reuse_live(sid, target, record, lease)) is not None:
             return _ok(rid, _reuse_live_payload(*live))
@@ -655,6 +660,9 @@ def _(rid, params: dict) -> dict:
                     cwd=profile_resume_cwd,
                     session_db=db,
                     source=source,
+                    conversation_identity=stored_runtime_overrides.get(
+                        "conversation_identity"
+                    ),
                 )
             finally:
                 if init_home_token is not None:

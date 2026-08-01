@@ -2103,6 +2103,10 @@ def _start_agent_build(sid: str, session: dict) -> None:
                         kw["reasoning_config_override"] = reasoning
                     if (tier := current.get("create_service_tier_override")) is not None:
                         kw["service_tier_override"] = tier
+                    if identity := _normalize_conversation_identity(
+                        current.get("conversation_identity")
+                    ):
+                        kw["conversation_identity"] = identity
                 agent = _make_agent(sid, key, **kw)
             finally:
                 _clear_session_context(tokens)
@@ -2609,6 +2613,10 @@ def _ensure_session_db_row(session: dict) -> None:
     parent_session_id = session.get("parent_session_id") or None
     if parent_session_id:
         model_config["_branched_from"] = parent_session_id
+    if identity := _normalize_conversation_identity(
+        session.get("conversation_identity")
+    ):
+        model_config["_conversation_identity"] = identity
     try:
         db.create_session(
             key,
@@ -3479,6 +3487,36 @@ def _resolve_startup_runtime() -> tuple[str, str | None]:
 _BARE_BILLING_PROVIDERS = {"auto", "openrouter", "custom"}
 
 
+def _normalize_conversation_identity(value) -> str:
+    """Return a short, display-safe name for a route-bound conversation."""
+    text = " ".join(str(value or "").split())
+    text = "".join(
+        char
+        for char in text
+        if char.isalnum() or char in {" ", "'", "’", "-", ".", "_"}
+    )
+    return text[:64].strip(" ._-")
+
+
+def _conversation_identity_prompt(value) -> str:
+    """Build the stable, session-local naming overlay for a wake route."""
+    identity = _normalize_conversation_identity(value)
+    if not identity:
+        return ""
+    quoted = json.dumps(identity, ensure_ascii=False)
+    return (
+        "Route-bound conversational identity:\n"
+        f"- Your name in this conversation is {quoted}.\n"
+        f"- Respond naturally when the user addresses you as {quoted}. If asked "
+        f"your name, answer {quoted}.\n"
+        "- Benaiah is the software platform you operate within, not the name you "
+        "should use for yourself in this conversation. Do not correct the user "
+        "to the platform name.\n"
+        "- This changes naming only. Keep the configured voice, personality, "
+        "permissions, and safety behaviour unchanged."
+    )
+
+
 def _stored_session_runtime_overrides(row: dict | None) -> dict:
     """Return runtime fields persisted with a stored session.
 
@@ -3521,6 +3559,9 @@ def _stored_session_runtime_overrides(row: dict | None) -> dict:
     api_mode = str(model_config.get("api_mode") or "").strip()
     reasoning_config = model_config.get("reasoning_config")
     service_tier = str(model_config.get("service_tier") or "").strip()
+    conversation_identity = _normalize_conversation_identity(
+        model_config.get("_conversation_identity")
+    )
 
     # Heal a bare ``"custom"`` provider stored by an older build (or any leak
     # site that bypassed _runtime_model_config's normalization). Bare custom is
@@ -3569,6 +3610,8 @@ def _stored_session_runtime_overrides(row: dict | None) -> dict:
         overrides["service_tier_override"] = ""
     elif service_tier:
         overrides["service_tier_override"] = service_tier
+    if conversation_identity:
+        overrides["conversation_identity"] = conversation_identity
 
     return overrides
 
@@ -6146,6 +6189,7 @@ def _make_agent(
     reasoning_config_override: dict | None = None,
     service_tier_override: str | None = None,
     platform_override: str | None = None,
+    conversation_identity: str | None = None,
 ):
     # AC-4 test seam: dead unless explicitly armed by the isolated certify
     # harness. Both inline and compute-host paths construct through _make_agent,
@@ -6180,6 +6224,11 @@ def _make_agent(
     cfg = _load_cfg()
     agent_cfg = cfg.get("agent") or {}
     system_prompt = _prompt_text(agent_cfg.get("system_prompt", ""))
+    identity_prompt = _conversation_identity_prompt(conversation_identity)
+    if identity_prompt:
+        system_prompt = "\n\n".join(
+            part for part in (system_prompt, identity_prompt) if part
+        ).strip()
     startup_skills = _parse_tui_skills_env()
     if startup_skills:
         from agent.skill_commands import build_preloaded_skills_prompt
@@ -6333,6 +6382,7 @@ def _init_session(
     session_db=None,
     source: str | None = None,
     profile_home: str | None = None,
+    conversation_identity: str | None = None,
 ):
     now = time.time()
     with _sessions_lock:
@@ -6360,6 +6410,10 @@ def _init_session(
             # launch profile. SessionBranch copies the parent's value so the
             # child stays on the same state.db.
             "profile_home": profile_home,
+            "conversation_identity": _normalize_conversation_identity(
+                conversation_identity
+            )
+            or None,
             # Per-session model override set by an in-session /model switch.
             # Honored on rebuild (/new, resume) so a switch in THIS session
             # never leaks into siblings via process-global env vars.
@@ -7459,6 +7513,7 @@ def _deferred_session_record(
     lazy: bool = False,
     model_override=None,
     resume_runtime_overrides: dict | None = None,
+    conversation_identity: str | None = None,
 ) -> dict:
     """A live-session record whose AIAgent is built later (lazy watch / cold
     resume) — _init_session's shape minus the agent."""
@@ -7469,6 +7524,10 @@ def _deferred_session_record(
         "agent_ready": threading.Event(),
         "attached_images": [],
         "close_on_disconnect": close_on_disconnect,
+        "conversation_identity": _normalize_conversation_identity(
+            conversation_identity
+        )
+        or None,
         "active_session_lease": lease,
         "cols": cols,
         "created_at": now,
