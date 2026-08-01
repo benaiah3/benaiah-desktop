@@ -16,7 +16,6 @@ import {
   Keyboard,
   KeyRound,
   Package,
-  QrCode,
   RefreshCw,
   Settings2,
   Upload,

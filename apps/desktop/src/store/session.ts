@@ -471,6 +471,7 @@ export const setGatewayState = (next: Updater<ConnectionState>) => updateAtom($g
 
 function sanitizePublicSessionRows(rows: SessionInfo[]): SessionInfo[] {
   let changed = false
+
   const sanitized = rows.map(session => {
     const title = session.title == null ? session.title : sanitizeBenaiahPublicText(session.title)
     const preview = session.preview == null ? session.preview : sanitizeBenaiahPublicText(session.preview)

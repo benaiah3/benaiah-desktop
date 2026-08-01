@@ -238,6 +238,7 @@ describe('armWakeWord (gateway-ready auto-arm)', () => {
 describe('refreshWakeWordAfterConfigChange', () => {
   it('restarts an active GUI listener without changing the persisted enabled setting', async () => {
     const calls: Array<[string, Record<string, unknown>]> = []
+
     const request = requester((method, params = {}) => {
       calls.push([method, params])
 
