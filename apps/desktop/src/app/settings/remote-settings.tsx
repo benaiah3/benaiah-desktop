@@ -24,6 +24,7 @@ function remainingLabel(expiresAt?: string) {
   const remaining = Math.max(0, new Date(expiresAt || '').getTime() - Date.now())
   const seconds = Math.ceil(remaining / 1000)
   const minutes = Math.floor(seconds / 60)
+
   return seconds > 0 ? `${minutes}:${String(seconds % 60).padStart(2, '0')}` : 'Expired'
 }
 
@@ -40,9 +41,11 @@ export function RemoteSettings() {
   const refresh = useCallback(async () => {
     setLoading(true)
     setError('')
+
     try {
       const next = await window.hermesDesktop.benaiahRemote.createPairing()
       setPairing(next)
+
       if (next.url) {
         setQrCode(await qrDataUrl(next.url))
       } else {
@@ -60,11 +63,14 @@ export function RemoteSettings() {
   const connectAccount = useCallback(async () => {
     setConnectingAccount(true)
     setError('')
+
     try {
       const next = await window.hermesDesktop.benaiahAccount.startQr()
+
       if (!next.linkUrl) {
         throw new Error('Benaiah did not return a phone connection code.')
       }
+
       setAccountLink(next)
       setAccountQrCode(await qrDataUrl(next.linkUrl))
     } catch {
@@ -82,18 +88,22 @@ export function RemoteSettings() {
 
   useEffect(() => {
     const timer = window.setInterval(() => tick(value => value + 1), 1000)
+
     return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
-    if (!accountLink) return
+    if (!accountLink) {return}
 
     let checking = false
+
     const check = async () => {
-      if (checking) return
+      if (checking) {return}
       checking = true
+
       try {
         const status = await window.hermesDesktop.benaiahAccount.status('default')
+
         if (status.linked) {
           setAccountLink(null)
           setAccountQrCode('')
@@ -105,12 +115,15 @@ export function RemoteSettings() {
         checking = false
       }
     }
+
     void check()
     const timer = window.setInterval(() => void check(), 1500)
+
     return () => window.clearInterval(timer)
   }, [accountLink, refresh])
 
   const expired = Boolean(pairing?.expiresAt && new Date(pairing.expiresAt).getTime() <= Date.now())
+
   const accountExpired = Boolean(
     accountLink?.expiresAt && new Date(accountLink.expiresAt).getTime() <= Date.now()
   )

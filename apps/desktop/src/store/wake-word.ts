@@ -206,6 +206,39 @@ export async function armWakeWord(request: WakeRequester = gatewayRequester): Pr
   }
 }
 
+/**
+ * Apply a saved wake-name change to the live listener. The engine captures its
+ * phrase when it starts, so a config save alone would leave the old phrase in
+ * memory until the app restarted. Only restart a listener owned by the GUI;
+ * another surface's microphone lease is left untouched.
+ */
+export async function refreshWakeWordAfterConfigChange(request: WakeRequester = gatewayRequester): Promise<void> {
+  try {
+    const status = await request<WakeStatusResponse>('wake.status', {})
+    applyWakeStatus(status)
+
+    if (!status?.listening || !status.enabled || !status.available) {
+      return
+    }
+
+    if (status.owner_surface && status.owner_surface !== 'gui') {
+      return
+    }
+
+    const stopped = await request<WakeStopResponse>('wake.stop', { persist: false })
+    applyWakeStopResult(stopped)
+
+    if (!stopped?.stopped) {
+      return
+    }
+
+    applyWakeStartResult(await request<WakeStartResponse>('wake.start', { surface: 'gui' }))
+  } catch {
+    // Saving settings must still succeed when the listener is unavailable or
+    // the connected backend predates wake.*. The next normal arm picks it up.
+  }
+}
+
 /** The composer button's click handler: stop when listening, start otherwise. */
 export async function toggleWakeWord(request: WakeRequester = gatewayRequester): Promise<void> {
   const state = $wakeWord.get()

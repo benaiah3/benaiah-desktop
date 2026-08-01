@@ -454,6 +454,9 @@ export const FIELD_LABELS: Record<string, string> = defineFieldCopy({
     maxRecordingSeconds: 'Max Recording Length',
     autoTts: 'Read Responses Aloud'
   },
+  wakeWord: {
+    phrase: 'Wake Name'
+  },
   stt: {
     enabled: 'Speech To Text',
     echoTranscripts: 'Echo Transcripts',
@@ -611,6 +614,9 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = defineFieldCopy({
   voice: {
     autoTts: 'Automatically speak assistant responses.'
   },
+  wakeWord: {
+    phrase: 'The name or phrase you say to start a hands-free conversation. Changes take effect after saving.'
+  },
   tts: {
     xai: {
       voiceId: 'xAI voice ID (e.g. eve) or a custom voice ID.',
@@ -711,6 +717,7 @@ export const SECTIONS: DesktopConfigSection[] = [
     label: 'Voice',
     icon: Mic,
     keys: [
+      'wake_word.phrase',
       'tts.provider',
       'stt.enabled',
       'stt.echo_transcripts',

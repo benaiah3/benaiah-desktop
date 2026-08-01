@@ -8,19 +8,21 @@ export function prepareBenaiahAccountLink(
   const parsed = new URL(linkUrl)
 
   if (
-    parsed.origin !== ACCOUNT_LINK_ORIGIN
-    || parsed.pathname !== '/settings'
-    || !parsed.searchParams.get('code')
-    || parsed.hash !== '#profile'
+    parsed.origin !== ACCOUNT_LINK_ORIGIN ||
+    parsed.pathname !== '/settings' ||
+    !parsed.searchParams.get('code') ||
+    parsed.hash !== '#profile'
   ) {
     throw new Error('Benaiah did not return a valid account link.')
   }
 
   if (options.returnToRemote) {
     const deviceId = String(options.deviceId || '')
+
     if (!DEVICE_ID_PATTERN.test(deviceId)) {
       throw new Error('Benaiah could not identify this Mac for remote access.')
     }
+
     parsed.searchParams.set('next', 'remote')
     parsed.searchParams.set('device', deviceId)
   }

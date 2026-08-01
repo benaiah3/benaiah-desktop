@@ -21,6 +21,7 @@ import {
 import { $keepAwake, setKeepAwake } from '@/store/keep-awake'
 import { notify, notifyError } from '@/store/notifications'
 import { repoDiscoveryPolicyFromConfig, repoDiscoveryPolicySignature, scanAndRecordRepos } from '@/store/projects'
+import { refreshWakeWordAfterConfigChange } from '@/store/wake-word'
 import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/hermes'
 
 import { setHermesConfigCache, useHermesConfigRecord } from '../hooks/use-config-record'
@@ -91,6 +92,7 @@ export function ConfigSettings({
   const [elevenLabsVoiceLabels, setElevenLabsVoiceLabels] = useState<Record<string, string>>({})
   const saveVersionRef = useRef(0)
   const savedDiscoverySignatureRef = useRef<string | undefined>(undefined)
+  const savedWakePhraseRef = useRef<string | undefined>(undefined)
   const [saveVersion, setSaveVersion] = useState(0)
 
   // Seed the local draft once, the first time the shared record lands.
@@ -102,6 +104,7 @@ export function ConfigSettings({
     if (loadedConfig && !configSeeded.current) {
       configSeeded.current = true
       savedDiscoverySignatureRef.current = repoDiscoveryPolicySignature(repoDiscoveryPolicyFromConfig(loadedConfig))
+      savedWakePhraseRef.current = String(getNested(loadedConfig, 'wake_word.phrase') ?? '').trim()
       setConfig(loadedConfig)
     }
   }, [loadedConfig])
@@ -113,6 +116,7 @@ export function ConfigSettings({
   useOnProfileSwitch(() => {
     configSeeded.current = false
     savedDiscoverySignatureRef.current = undefined
+    savedWakePhraseRef.current = undefined
     setConfig(null)
     saveVersionRef.current = 0
     setSaveVersion(0)
@@ -167,6 +171,13 @@ export function ConfigSettings({
             if (savedDiscoverySignatureRef.current !== discoverySignature) {
               savedDiscoverySignatureRef.current = discoverySignature
               await scanAndRecordRepos(true)
+            }
+
+            const wakePhrase = String(getNested(config, 'wake_word.phrase') ?? '').trim()
+
+            if (savedWakePhraseRef.current !== wakePhrase) {
+              savedWakePhraseRef.current = wakePhrase
+              await refreshWakeWordAfterConfigChange()
             }
 
             onConfigSaved?.()
