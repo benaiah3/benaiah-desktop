@@ -18,6 +18,7 @@ import {
   $currentProvider,
   $currentReasoningEffort,
   $messages,
+  $newChatConversationIdentity,
   $newChatWorkspaceTarget,
   $resumeFailedSessionId,
   $selectedStoredSessionId,
@@ -29,6 +30,7 @@ import {
   setCurrentProvider,
   setCurrentReasoningEffort,
   setMessages,
+  setNewChatConversationIdentity,
   setNewChatWorkspaceTarget,
   setResumeFailedSessionId,
   setSelectedStoredSessionId,
@@ -416,7 +418,10 @@ async function createWith(
 }
 
 describe('startFreshSessionDraft', () => {
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    setNewChatConversationIdentity(null)
+  })
 
   it('can reset machine-bound session state without closing the current overlay route', async () => {
     const navigate = vi.fn()
@@ -431,6 +436,16 @@ describe('startFreshSessionDraft', () => {
     expect(navigate).not.toHaveBeenCalled()
     expect($currentCwd.get()).toBe('')
     expect($newChatWorkspaceTarget.get()).toBeNull()
+  })
+
+  it('binds a wake identity to the next session only', async () => {
+    const params = await createWith(
+      () => {},
+      handle => handle.startFreshSessionDraft({ conversationIdentity: '  Max  ' })
+    )
+
+    expect(params).toMatchObject({ conversation_identity: 'Max' })
+    expect($newChatConversationIdentity.get()).toBeNull()
   })
 })
 

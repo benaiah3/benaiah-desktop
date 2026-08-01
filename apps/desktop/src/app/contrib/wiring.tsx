@@ -37,6 +37,7 @@ import { $pinnedSessionIds, pinSession, restoreWorktree, unpinSession } from '@/
 import { $previewTarget } from '@/store/preview'
 import {
   $activeGatewayProfile,
+  $freshSessionConversationIdentity,
   $freshSessionRequest,
   $profileScope,
   ensureGatewayProfile,
@@ -464,6 +465,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   // A profile switch/create drops to a fresh new-session draft so the
   // previously open session doesn't bleed across contexts. Skip initial value.
   const freshSessionRequest = useStore($freshSessionRequest)
+  const freshSessionConversationIdentity = useStore($freshSessionConversationIdentity)
   const lastFreshRef = useRef(freshSessionRequest)
 
   // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
@@ -473,8 +475,10 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     }
 
     lastFreshRef.current = freshSessionRequest
-    startFreshSessionDraft()
-  }, [freshSessionRequest, startFreshSessionDraft])
+    startFreshSessionDraft(
+      freshSessionConversationIdentity ? { conversationIdentity: freshSessionConversationIdentity } : undefined
+    )
+  }, [freshSessionConversationIdentity, freshSessionRequest, startFreshSessionDraft])
 
   // Swapping the live gateway to another profile must re-pull that profile's
   // global model + active-profile pill (both are nanostores — the blanket
@@ -684,7 +688,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
       if (event.type === 'wake.detected') {
         const payload = event.payload as
-          | { profile?: null | string; start_new_session?: boolean; voice?: null | string }
+          | { phrase?: null | string; profile?: null | string; start_new_session?: boolean; voice?: null | string }
           | undefined
 
         // Audible confirmation that the wake registered, before voice capture
@@ -696,16 +700,17 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         // as clicking it in the profile rail), then opens the fresh session
         // and starts voice there.
         const targetProfile = payload?.profile?.trim()
+        const conversationIdentity = payload?.phrase?.trim() || null
         const activeProfile = normalizeProfileKey($activeGatewayProfile.get())
 
         if (targetProfile && normalizeProfileKey(targetProfile) !== activeProfile) {
           if (payload?.start_new_session !== false) {
-            newSessionInProfile(targetProfile)
+            newSessionInProfile(targetProfile, conversationIdentity)
           } else {
             void ensureGatewayProfile(normalizeProfileKey(targetProfile))
           }
         } else if (payload?.start_new_session !== false) {
-          startFreshSessionDraft()
+          startFreshSessionDraft({ conversationIdentity })
         }
 
         requestVoiceConversationStart(payload?.voice)

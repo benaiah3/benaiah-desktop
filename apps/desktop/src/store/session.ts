@@ -449,6 +449,10 @@ export const $yoloActive = atom(false)
 export const $currentCwd = atom(getRememberedWorkspaceCwd())
 export const $newChatWorkspaceTarget = atom<NewChatWorkspaceTarget>(undefined)
 export const $newChatWorkspaceTargetGeneration = atom(0)
+// One-shot identity for a wake-routed new conversation. It is deliberately
+// runtime-only: the backend persists the identity on the session row, while a
+// normal New Chat clears this value so a wake name never leaks into typed chat.
+export const $newChatConversationIdentity = atom<string | null>(null)
 export const $currentBranch = atom('')
 export const $currentUsage = atom<UsageStats>({
   calls: 0,
@@ -600,6 +604,9 @@ export const setNewChatWorkspaceTarget = (next: NewChatWorkspaceTarget): number 
 
   return generation
 }
+
+export const setNewChatConversationIdentity = (next: null | string) =>
+  updateAtom($newChatConversationIdentity, next?.trim() || null)
 
 export const workspaceCwdForNewSession = (): string => {
   if ($connection.get()?.mode === 'remote') {
