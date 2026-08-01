@@ -381,12 +381,12 @@ export function useVoiceConversation({
     }
 
     stopBargeMonitorRef.current = monitorSpeechDuringPlayback({
-      // The thinking cue is app-generated speaker output too. Without marking
-      // it as playback, the VAD applies its quiet-room threshold and hears the
-      // cue through the mic as a user barge, cancelling TTS before audio starts.
-      // The playback threshold still admits nearby speech while filtering the
-      // app's own soft blips.
-      isPlaying: () => $voicePlayback.get().status === 'speaking' || isThinkingSoundActive(),
+      // Every app-audio phase is echo-prone, including the preparation gap
+      // between the thinking cue and the first TTS frame. If `preparing` falls
+      // back to the quiet-room threshold, ambient/speaker residue can cancel
+      // the session before synthesis is even requested. The playback threshold
+      // still admits nearby speech while filtering the app's own soft blips.
+      isPlaying: () => $voicePlayback.get().status !== 'idle' || isThinkingSoundActive(),
       onSpeech: () => {
         bargeCapturePendingRef.current = true
         bargedRef.current = true
@@ -418,7 +418,7 @@ export function useVoiceConversation({
 
       const response = pendingResponse()
 
-      if (response && response.id === responseId) {
+      if (response) {
         if (response.text.length > spokenSourceLengthRef.current) {
           session.append(response.text.slice(spokenSourceLengthRef.current))
           spokenSourceLengthRef.current = response.text.length
@@ -445,14 +445,19 @@ export function useVoiceConversation({
 
         const response = pendingResponse()
 
-        if (!response || response.id !== responseId) {
-          settleAfterSpeech(false)
+        // A tool turn can temporarily remove/replace its interim assistant
+        // bubble while the final bubble is committed. Follow the logical turn
+        // through that transition: `busy` is authoritative while generation
+        // is active, and a changed message id is normal UI reconciliation —
+        // neither means the spoken reply vanished.
+        if (busyRef.current || response?.pending) {
+          window.setTimeout(poll, 250)
 
           return
         }
 
-        if (response.pending || busyRef.current) {
-          window.setTimeout(poll, 250)
+        if (!response) {
+          settleAfterSpeech(false)
 
           return
         }

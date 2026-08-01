@@ -178,7 +178,7 @@ export function monitorSpeechDuringPlayback(callbacks: BargeMonitorCallbacks): (
       const floorSamples: number[] = []
       const recentAbove: { above: boolean; at: number }[] = []
       let calibratedSince: number | null = null
-      let floorLocked = false
+      let quietCalibrated = false
       let quietFloor = 0
       let segmentStartedAt = Date.now()
       let wasPlaying = false
@@ -218,16 +218,23 @@ export function monitorSpeechDuringPlayback(callbacks: BargeMonitorCallbacks): (
         const playing = callbacks.isPlaying ? callbacks.isPlaying() : true
 
         if (!tripped) {
-          // Quiet-floor calibration: quiet-phase samples only. The floor is
-          // HELD while audio plays — never recalibrated against speaker bleed.
-          if (!floorLocked) {
-            if (!playing) {
+          // Quiet-floor calibration: require a continuous quiet-phase window.
+          // App audio makes detection ready at the conservative playback
+          // threshold, but must never lock an empty (zero) noise floor. That
+          // zero-floor lock made a later preparation gap use the room-sensitive
+          // threshold and probabilistically cancel TTS before it started.
+          if (!quietCalibrated) {
+            if (playing) {
+              calibratedSince = null
+              floorSamples.length = 0
+              quietFloor = 0
+            } else {
               calibratedSince ??= now
               pushFloorSample(level)
-            }
 
-            if (playing || (calibratedSince !== null && now - calibratedSince >= CALIBRATION_MS)) {
-              floorLocked = true
+              if (now - calibratedSince >= CALIBRATION_MS) {
+                quietCalibrated = true
+              }
             }
           }
 
@@ -252,16 +259,20 @@ export function monitorSpeechDuringPlayback(callbacks: BargeMonitorCallbacks): (
           // reachable even over loud playback.
           let trigger = Math.max(MIN_TRIGGER_LEVEL, quietFloor * FLOOR_MULTIPLIER)
 
-          if (playing) {
+          if (playing || !quietCalibrated) {
             trigger = Math.min(Math.max(trigger, PLAYBACK_MIN_TRIGGER_LEVEL), TRIGGER_CEILING_LEVEL)
           }
 
           // Track ambient drift while quiet and below trigger.
-          if (floorLocked && !playing && level < trigger) {
+          if (quietCalibrated && !playing && level < trigger) {
             pushFloorSample(level)
           }
 
-          const above = floorLocked && level >= trigger && now >= graceUntil
+          // During app audio, the playback clamp is safe enough to detect a
+          // real barge before quiet calibration exists. During an initial quiet
+          // phase, wait for its floor so normal room noise cannot self-trigger.
+          const detectionReady = quietCalibrated || playing
+          const above = detectionReady && level >= trigger && now >= graceUntil
 
           recentAbove.push({ above, at: now })
 
