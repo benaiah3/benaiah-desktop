@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import numpy as np
+import pytest
 
 import tools.wake_word as wake
 
@@ -69,6 +69,7 @@ def test_disabled_wake_never_claims_a_surface():
 
 
 def test_stt_spotter_waits_for_one_word_to_end_before_transcribing(monkeypatch):
+    np = pytest.importorskip("numpy")
     monkeypatch.setattr(wake, "_stt_ready", lambda: True)
     calls = []
 
@@ -90,6 +91,7 @@ def test_stt_spotter_waits_for_one_word_to_end_before_transcribing(monkeypatch):
 
 
 def test_stt_spotter_does_not_transcribe_ambient_silence(monkeypatch):
+    np = pytest.importorskip("numpy")
     monkeypatch.setattr(wake, "_stt_ready", lambda: True)
     monkeypatch.setattr(
         "tools.transcription_tools.transcribe_audio",
