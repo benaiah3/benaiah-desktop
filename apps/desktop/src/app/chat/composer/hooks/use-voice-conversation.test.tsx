@@ -34,7 +34,10 @@ vi.mock('@/lib/voice-playback', () => ({
   stopVoicePlayback: () => stopVoicePlayback()
 }))
 
+let thinkingSoundActive = false
+
 vi.mock('@/lib/thinking-sound', () => ({
+  isThinkingSoundActive: () => thinkingSoundActive,
   startThinkingSound: vi.fn(),
   stopThinkingSound: vi.fn()
 }))
@@ -137,6 +140,7 @@ async function enterThinking(hook: ReturnType<typeof renderConversation>['hook']
 describe('useVoiceConversation full-duplex barge-in', () => {
   beforeEach(() => {
     monitorCalls.length = 0
+    thinkingSoundActive = false
     vi.clearAllMocks()
     micHandle.start.mockResolvedValue(undefined)
     micHandle.stop.mockResolvedValue(null)
@@ -155,6 +159,19 @@ describe('useVoiceConversation full-duplex barge-in', () => {
     await waitFor(() => expect(hook.result.current.status).toBe('thinking'))
     // busy=true + thinking → the full-duplex monitor must be live.
     await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+  })
+
+  it('treats the thinking cue as app audio so it cannot self-trigger barge-in', async () => {
+    const { hook } = renderConversation()
+
+    await enterThinking(hook)
+    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+
+    const monitor = monitorCalls.at(-1)
+    expect(monitor?.isPlaying?.()).toBe(false)
+
+    thinkingSoundActive = true
+    expect(monitor?.isPlaying?.()).toBe(true)
   })
 
   it('interrupts the in-flight turn when speech trips mid-generation', async () => {

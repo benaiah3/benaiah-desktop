@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useI18n } from '@/i18n'
-import { startThinkingSound, stopThinkingSound } from '@/lib/thinking-sound'
+import { isThinkingSoundActive, startThinkingSound, stopThinkingSound } from '@/lib/thinking-sound'
 import { monitorSpeechDuringPlayback } from '@/lib/voice-barge-in'
 import {
   consumeUserStopRequested,
@@ -381,7 +381,12 @@ export function useVoiceConversation({
     }
 
     stopBargeMonitorRef.current = monitorSpeechDuringPlayback({
-      isPlaying: () => $voicePlayback.get().status === 'speaking',
+      // The thinking cue is app-generated speaker output too. Without marking
+      // it as playback, the VAD applies its quiet-room threshold and hears the
+      // cue through the mic as a user barge, cancelling TTS before audio starts.
+      // The playback threshold still admits nearby speech while filtering the
+      // app's own soft blips.
+      isPlaying: () => $voicePlayback.get().status === 'speaking' || isThinkingSoundActive(),
       onSpeech: () => {
         bargeCapturePendingRef.current = true
         bargedRef.current = true
