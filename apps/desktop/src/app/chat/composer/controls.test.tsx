@@ -91,6 +91,19 @@ describe('wake-word ear visibility', () => {
     expect(screen.getByLabelText('Wake word: "hey hermes" — listening')).toBeTruthy()
   })
 
+  it('shows both configured wake names without changing the tooltip structure', () => {
+    applyWakeStatus({
+      available: true,
+      enabled: true,
+      listening: true,
+      phrase: 'max',
+      secondary_phrase: 'smith'
+    })
+    renderControls()
+
+    expect(screen.getByLabelText('Wake word: "max" or "smith" — listening')).toBeTruthy()
+  })
+
   it('stays mounted (enabled in config) even when a start was refused', () => {
     applyWakeStatus({ available: true, enabled: true, listening: false, phrase: 'hey hermes' })
     // Transient refusal marks available false but enabled keeps it mounted.

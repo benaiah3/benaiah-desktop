@@ -20,6 +20,8 @@ export interface WakeWordState {
   pending: boolean
   /** Human-facing wake phrase, e.g. "hey hermes". */
   phrase: string
+  /** Optional second wake phrase, mapped to its independently configured voice. */
+  secondaryPhrase: string
 }
 
 const INITIAL_WAKE_WORD_STATE: WakeWordState = {
@@ -28,7 +30,8 @@ const INITIAL_WAKE_WORD_STATE: WakeWordState = {
   listening: false,
   notice: '',
   pending: false,
-  phrase: ''
+  phrase: '',
+  secondaryPhrase: ''
 }
 
 export const $wakeWord = atom<WakeWordState>(INITIAL_WAKE_WORD_STATE)
@@ -46,6 +49,7 @@ export interface WakeStatusResponse {
   owned_by_caller?: boolean
   owner_surface?: string | null
   phrase?: string
+  secondary_phrase?: string
   provider?: string
 }
 
@@ -54,6 +58,7 @@ export interface WakeStartResponse {
   hint?: string
   owner_surface?: string | null
   phrase?: string
+  secondary_phrase?: string
   provider?: string
   reason?: string
   started?: boolean
@@ -133,7 +138,8 @@ export function applyWakeStatus(status: WakeStatusResponse | null | undefined): 
     enabled: Boolean(status?.enabled),
     listening,
     notice: listening && !silent ? '' : noticeFrom(status),
-    phrase: status?.phrase?.trim() || current.phrase
+    phrase: status?.phrase?.trim() || current.phrase,
+    secondaryPhrase: status?.secondary_phrase?.trim() || ''
   })
 }
 
@@ -150,7 +156,8 @@ export function applyWakeStartResult(result: WakeStartResponse | null | undefine
       listening: true,
       notice: '',
       pending: false,
-      phrase: result.phrase?.trim() || current.phrase
+      phrase: result.phrase?.trim() || current.phrase,
+      secondaryPhrase: result.secondary_phrase?.trim() ?? current.secondaryPhrase
     })
 
     return

@@ -31,6 +31,7 @@ describe('applyWakeStatus', () => {
       owned_by_caller: true,
       owner_surface: 'gui',
       phrase: 'hey hermes',
+      secondary_phrase: 'sonya',
       provider: 'openwakeword'
     })
 
@@ -38,8 +39,16 @@ describe('applyWakeStatus', () => {
       available: true,
       listening: true,
       notice: '',
-      phrase: 'hey hermes'
+      phrase: 'hey hermes',
+      secondaryPhrase: 'sonya'
     })
+  })
+
+  it('clears a removed secondary phrase on the next status refresh', () => {
+    applyWakeStatus({ listening: true, phrase: 'max', secondary_phrase: 'smith' })
+    applyWakeStatus({ listening: true, phrase: 'max', secondary_phrase: '' })
+
+    expect($wakeWord.get().secondaryPhrase).toBe('')
   })
 
   it('tracks unavailability and carries the hint for the tooltip', () => {

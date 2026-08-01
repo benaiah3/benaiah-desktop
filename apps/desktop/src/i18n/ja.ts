@@ -1833,9 +1833,12 @@ export const ja = defineLocale({
     voiceDictation: '音声口述',
     speakReplies: '返信を読み上げる',
     stopSpeakingReplies: '返信の読み上げを停止',
-    wakeWordListening: phrase => `ウェイクワード:「${phrase}」— 待機中`,
-    wakeWordOff: phrase => `ウェイクワード:「${phrase}」— オフ`,
-    wakeWordPausedVoice: phrase => `ウェイクワード:「${phrase}」— 音声チャット中は一時停止`,
+    wakeWordListening: (phrase, secondaryPhrase) =>
+      `ウェイクワード:「${phrase}」${secondaryPhrase ? `または「${secondaryPhrase}」` : ''}— 待機中`,
+    wakeWordOff: (phrase, secondaryPhrase) =>
+      `ウェイクワード:「${phrase}」${secondaryPhrase ? `または「${secondaryPhrase}」` : ''}— オフ`,
+    wakeWordPausedVoice: (phrase, secondaryPhrase) =>
+      `ウェイクワード:「${phrase}」${secondaryPhrase ? `または「${secondaryPhrase}」` : ''}— 音声チャット中は一時停止`,
     lookupLoading: '検索中…',
     lookupNoMatches: '一致なし。',
     lookupTry: '試す',

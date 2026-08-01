@@ -12760,6 +12760,7 @@ def _(rid, params: dict) -> dict:
             owns_listener,
             start_listening,
             wake_phrase,
+            wake_routes,
             wake_surface_enabled,
         )
     except Exception as e:
@@ -12809,6 +12810,8 @@ def _(rid, params: dict) -> dict:
 
     sid = str(params.get("session_id") or "")
     phrase = wake_phrase(cfg)
+    routes = wake_routes(cfg)
+    secondary_phrase = routes[1]["phrase"] if len(routes) > 1 else ""
     new_session = bool(cfg.get("start_new_session", True))
 
     def _on_detect() -> None:
@@ -12859,6 +12862,7 @@ def _(rid, params: dict) -> dict:
     return _ok(rid, {
         "started": True,
         "phrase": reqs["phrase"],
+        "secondary_phrase": secondary_phrase,
         "provider": reqs["provider"],
         "owner_surface": surface,
         "enabled_persisted": enabled_persisted,
@@ -12933,6 +12937,7 @@ def _(rid, params: dict) -> dict:
             load_wake_word_config,
             owns_listener,
             silent_audio_hint,
+            wake_routes,
         )
         cfg = load_wake_word_config()
         reqs = check_wake_word_requirements(cfg)
@@ -12942,6 +12947,8 @@ def _(rid, params: dict) -> dict:
         listening = owned_by_caller and is_listening()
         silent = listening and audio_is_silent()
         input_device = get_input_device_status(cfg)
+        routes = wake_routes(cfg)
+        secondary_phrase = routes[1]["phrase"] if len(routes) > 1 else ""
         hint = reqs.get("hint", "")
         if input_device.get("error") and not hint:
             hint = f"Wake-word input device could not be resolved: {input_device['error']}"
@@ -12952,6 +12959,7 @@ def _(rid, params: dict) -> dict:
             "owned_by_caller": owned_by_caller,
             "owner_surface": owner_surface if owner is not None else None,
             "phrase": reqs["phrase"],
+            "secondary_phrase": secondary_phrase,
             "provider": reqs["provider"],
             "configured_surface": str(cfg.get("surface") or "auto"),
             "input_device": input_device,

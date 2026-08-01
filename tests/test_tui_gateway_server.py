@@ -1772,6 +1772,7 @@ def test_wake_status_reports_configured_input_device_and_windows_silence_hint(mo
     config = {
         "enabled": True,
         "phrase": "hey hermes",
+        "secondary_phrase": "sonya",
         "provider": "openwakeword",
         "surface": "gui",
         "input_device": "Microphone Array",
@@ -1813,6 +1814,7 @@ def test_wake_status_reports_configured_input_device_and_windows_silence_hint(mo
             transport=transport,
         )
         assert response["result"]["configured_surface"] == "gui"
+        assert response["result"]["secondary_phrase"] == "sonya"
         assert response["result"]["input_device"] == device
         assert response["result"]["audio_silent"] is True
         assert response["result"]["hint"] == (

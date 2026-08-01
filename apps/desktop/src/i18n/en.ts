@@ -1991,9 +1991,12 @@ export const en: Translations = {
     voiceDictation: 'Voice dictation',
     speakReplies: 'Read replies aloud',
     stopSpeakingReplies: 'Stop reading replies aloud',
-    wakeWordListening: phrase => `Wake word: "${phrase}" — listening`,
-    wakeWordOff: phrase => `Wake word: "${phrase}" — off`,
-    wakeWordPausedVoice: phrase => `Wake word: "${phrase}" — paused during voice chat`,
+    wakeWordListening: (phrase, secondaryPhrase) =>
+      `Wake word: "${phrase}"${secondaryPhrase ? ` or "${secondaryPhrase}"` : ''} — listening`,
+    wakeWordOff: (phrase, secondaryPhrase) =>
+      `Wake word: "${phrase}"${secondaryPhrase ? ` or "${secondaryPhrase}"` : ''} — off`,
+    wakeWordPausedVoice: (phrase, secondaryPhrase) =>
+      `Wake word: "${phrase}"${secondaryPhrase ? ` or "${secondaryPhrase}"` : ''} — paused during voice chat`,
     lookupLoading: 'Looking up…',
     lookupNoMatches: 'No matches.',
     lookupTry: 'Try',
