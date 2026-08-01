@@ -1474,15 +1474,18 @@ DEFAULT_CONFIG = {
         "stop_phrases": ["stop"],
     },
 
-    # "Hey Hermes" hands-free wake word. Always-on, on-device hotword
+    # Hands-free wake word. Always-on, on-device hotword
     # detection that starts a fresh voice session — the "Hey Siri" pattern.
     # Off by default; toggle with /wake or `wake_word.enabled: true`.
     "wake_word": {
         "enabled": False,
         "surface": "auto",            # eligible surface: "auto" (first claimant) | "cli" | "tui" | "gui"
         "input_device": None,          # PortAudio input device index/name; null uses the process default
-        "provider": "openwakeword",   # "openwakeword" (free, local) | "sherpa" (free, ANY phrase, no training) | "porcupine" (premium; needs PORCUPINE_ACCESS_KEY)
-        "phrase": "hey hermes",       # for "sherpa" this IS the detected phrase (any text works); for other engines it's a cosmetic label — detection is keyed by the model/keyword below
+        "provider": "stt",            # "stt" recognizes both configured names; sherpa/openwakeword/porcupine remain available
+        "phrase": "benaiah",          # customizable primary wake name
+        "voice": "en-GB-RyanNeural", # voice selected for the primary name
+        "secondary_phrase": "sonya", # optional second wake name; blank disables it
+        "secondary_voice": "en-GB-SoniaNeural", # voice selected for the second name
         "sensitivity": 0.6,           # 0.0-1.0 detection threshold, consistent across engines (higher = stricter, fewer false triggers)
         "confirmation_frames": 3,     # openWakeWord only: consecutive over-threshold frames required to fire (higher = fewer false triggers on ambient speech, slightly more latency; 1 = old single-frame behavior)
         "start_new_session": True,    # start a fresh session on wake vs. continue the current one

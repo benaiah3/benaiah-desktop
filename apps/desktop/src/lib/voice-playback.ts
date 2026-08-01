@@ -69,6 +69,8 @@ function currentState(
 export interface VoicePlaybackOptions {
   messageId?: string | null
   source: VoicePlaybackSource
+  /** Optional per-conversation provider voice selected by a wake phrase. */
+  voice?: string | null
 }
 
 export interface StopVoicePlaybackOptions {
@@ -119,7 +121,7 @@ export function consumeUserStopRequested(): boolean {
 // instead of after full synthesis + base64 transfer.
 // ---------------------------------------------------------------------------
 
-async function resolveSpeakStreamUrl(): Promise<null | string> {
+async function resolveSpeakStreamUrl(voice?: string | null): Promise<null | string> {
   const desktop = window.hermesDesktop
 
   if (!desktop?.getConnection) {
@@ -144,6 +146,10 @@ async function resolveSpeakStreamUrl(): Promise<null | string> {
     // config/.env (same seam as /api/pty?profile=).
     if (profile) {
       url.searchParams.set('profile', profile)
+    }
+
+    if (voice?.trim()) {
+      url.searchParams.set('voice', voice.trim())
     }
 
     return url.toString()
@@ -353,7 +359,7 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
  * whole-text `playSpeechText`.
  */
 export async function startSpeechStream(options: VoicePlaybackOptions): Promise<null | SpeechStreamSession> {
-  const wsUrl = await resolveSpeakStreamUrl()
+  const wsUrl = await resolveSpeakStreamUrl(options.voice)
 
   if (!wsUrl) {
     return null
@@ -392,7 +398,7 @@ async function playSpeechDataUrl(
   options: VoicePlaybackOptions,
   isCurrent: () => boolean
 ): Promise<boolean> {
-  const response = await speakText(speakableText)
+  const response = await speakText(speakableText, options.voice)
 
   if (!isCurrent()) {
     return false
@@ -488,7 +494,7 @@ export async function playSpeechText(text: string, options: VoicePlaybackOptions
   try {
     // Streaming first; the POST data-URL path is the fallback for backends
     // without the WS endpoint or providers without a chunked API.
-    const streamUrl = await resolveSpeakStreamUrl()
+    const streamUrl = await resolveSpeakStreamUrl(options.voice)
 
     if (streamUrl && isCurrent()) {
       const outcome = await playSpeechStream(streamUrl, speakableText, options)

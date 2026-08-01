@@ -32,8 +32,9 @@ def stream_client(monkeypatch, _isolate_hermes_home):
             web_server.app.state.auth_required = previous_auth_required
 
 
-def _url(token: str | None = None) -> str:
-    return f"/api/audio/speak-stream?{urlencode({'token': token or web_server._SESSION_TOKEN})}"
+def _url(token: str | None = None, **params: str) -> str:
+    query = {"token": token or web_server._SESSION_TOKEN, **params}
+    return f"/api/audio/speak-stream?{urlencode(query)}"
 
 
 class _FakeStreamer:
@@ -74,6 +75,31 @@ def test_streams_pcm_frames_then_end(stream_client, monkeypatch):
         assert conn.receive_json() == {"type": "end"}
 
     assert streamer.requests == ["Hello there."]
+
+
+def test_wake_selected_voice_is_scoped_to_stream_config(stream_client, monkeypatch):
+    streamer = _FakeStreamer([b"\x00\x00"])
+    seen = {}
+
+    def resolve(cfg):
+        seen["voice"] = cfg["edge"]["voice"]
+        return streamer
+
+    monkeypatch.setattr("tools.tts_streaming.resolve_streaming_provider", resolve)
+    monkeypatch.setattr(
+        "tools.tts_tool._load_tts_config",
+        lambda: {"provider": "edge", "edge": {"voice": "en-GB-RyanNeural"}},
+    )
+    monkeypatch.setattr("tools.tts_tool._get_provider", lambda cfg: "edge")
+    monkeypatch.setattr("tools.tts_tool._resolve_max_text_length", lambda provider, cfg: 4000)
+
+    with stream_client.websocket_connect(_url(voice="en-GB-SoniaNeural")) as conn:
+        assert conn.receive_json()["type"] == "start"
+        conn.send_text(json.dumps({"text": "Hello.", "done": True}))
+        assert conn.receive_bytes() == b"\x00\x00"
+        assert conn.receive_json() == {"type": "end"}
+
+    assert seen["voice"] == "en-GB-SoniaNeural"
 
 
 
@@ -119,5 +145,4 @@ def test_split_text_respects_cap_and_preserves_content():
     joined = " ".join(pieces)
     for word in text.replace(".", "").split():
         assert word in joined
-
 

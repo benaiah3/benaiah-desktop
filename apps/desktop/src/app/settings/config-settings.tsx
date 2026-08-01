@@ -37,6 +37,12 @@ import { ModelSettings, ModelSettingsSkeleton } from './model-settings'
 import { EmptyState, ListRow, SettingsContent, SettingsSkeleton, ToggleRow } from './primitives'
 import { QuickEntrySettings } from './quick-entry-settings'
 
+function wakeRouteSignature(config: HermesConfigRecord): string {
+  return ['phrase', 'voice', 'secondary_phrase', 'secondary_voice']
+    .map(key => String(getNested(config, `wake_word.${key}`) ?? '').trim())
+    .join('\u0000')
+}
+
 // On the Voice page, only surface the sub-fields of the *selected* TTS/STT
 // provider — otherwise every provider's options render at once (the "totally
 // crazy" wall of ~30 fields). Top-level keys (tts.provider, stt.enabled,
@@ -104,7 +110,7 @@ export function ConfigSettings({
     if (loadedConfig && !configSeeded.current) {
       configSeeded.current = true
       savedDiscoverySignatureRef.current = repoDiscoveryPolicySignature(repoDiscoveryPolicyFromConfig(loadedConfig))
-      savedWakePhraseRef.current = String(getNested(loadedConfig, 'wake_word.phrase') ?? '').trim()
+      savedWakePhraseRef.current = wakeRouteSignature(loadedConfig)
       setConfig(loadedConfig)
     }
   }, [loadedConfig])
@@ -173,7 +179,7 @@ export function ConfigSettings({
               await scanAndRecordRepos(true)
             }
 
-            const wakePhrase = String(getNested(config, 'wake_word.phrase') ?? '').trim()
+            const wakePhrase = wakeRouteSignature(config)
 
             if (savedWakePhraseRef.current !== wakePhrase) {
               savedWakePhraseRef.current = wakePhrase

@@ -37,6 +37,8 @@ interface VoiceConversationOptions {
   onTranscribeAudio?: (audio: Blob) => Promise<string>
   pendingResponse: () => PendingVoiceResponse | null
   consumePendingResponse: () => void
+  /** Per-conversation TTS voice selected by the wake phrase. */
+  voice?: string | null
   /** Awaited right before the mic is opened. Used to let the wake-word listener
    *  fully release the capture device first, so the two never contend. */
   beforeMicOpen?: () => Promise<void> | void
@@ -56,7 +58,8 @@ export function useVoiceConversation({
   onTranscribeAudio,
   pendingResponse,
   consumePendingResponse,
-  beforeMicOpen
+  beforeMicOpen,
+  voice
 }: VoiceConversationOptions) {
   const { t } = useI18n()
   const voiceCopy = t.notifications.voice
@@ -466,7 +469,10 @@ export function useVoiceConversation({
         // this is a safety net for read-aloud-style entries into the loop.
         ensureBargeMonitor()
 
-        void playSpeechText(response.text, { source: 'voice-conversation' })
+        void playSpeechText(response.text, {
+          source: 'voice-conversation',
+          ...(voice?.trim() ? { voice: voice.trim() } : {})
+        })
           .catch(error => notifyError(error, voiceCopy.playbackFailed))
           .finally(() => {
             if (responseIdRef.current === responseId) {
@@ -478,7 +484,7 @@ export function useVoiceConversation({
 
       poll()
     },
-    [ensureBargeMonitor, pendingResponse, settleAfterSpeech, voiceCopy.playbackFailed]
+    [ensureBargeMonitor, pendingResponse, settleAfterSpeech, voice, voiceCopy.playbackFailed]
   )
 
   /**
@@ -501,7 +507,10 @@ export function useVoiceConversation({
       ensureBargeMonitor()
 
       void (async () => {
-        const session = await startSpeechStream({ source: 'voice-conversation' })
+        const session = await startSpeechStream({
+          source: 'voice-conversation',
+          ...(voice?.trim() ? { voice: voice.trim() } : {})
+        })
 
         // The session may resolve after the loop moved on (barge, disable).
         if (responseIdRef.current !== responseId) {
@@ -544,7 +553,7 @@ export function useVoiceConversation({
         settleAfterSpeech(bargedRef.current)
       })()
     },
-    [awaitFallbackSpeech, ensureBargeMonitor, feedSpeechSession, settleAfterSpeech]
+    [awaitFallbackSpeech, ensureBargeMonitor, feedSpeechSession, settleAfterSpeech, voice]
   )
 
   const start = useCallback(async () => {

@@ -292,6 +292,7 @@ class DebugShareRequest(BaseModel):
 
 class TTSSpeakRequest(BaseModel):
     text: str
+    voice: Optional[str] = None
 
 
 # --- from web_server.py (originally lines 11549-11551) ---
@@ -706,4 +707,3 @@ class _PluginProvidersPutBody(BaseModel):
 
 class _PluginVisibilityBody(BaseModel):
     hidden: bool
-

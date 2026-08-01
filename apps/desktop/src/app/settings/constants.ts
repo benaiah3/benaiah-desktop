@@ -285,11 +285,7 @@ export const ENUM_OPTIONS: Record<string, string[]> = {
   // Benaiah's curated British Edge voices. Existing custom values are merged
   // into the dropdown by enumOptionsFor so a prior deliberate choice is never
   // discarded.
-  'tts.edge.voice': [
-    'en-GB-RyanNeural',
-    'en-GB-SoniaNeural',
-    'en-GB-ThomasNeural'
-  ],
+  'tts.edge.voice': ['en-GB-RyanNeural', 'en-GB-SoniaNeural', 'en-GB-ThomasNeural'],
   'tts.gemini.model': ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'],
   // Gemini TTS prebuilt voice set.
   'tts.gemini.voice': [
@@ -718,6 +714,9 @@ export const SECTIONS: DesktopConfigSection[] = [
     icon: Mic,
     keys: [
       'wake_word.phrase',
+      'wake_word.voice',
+      'wake_word.secondary_phrase',
+      'wake_word.secondary_voice',
       'tts.provider',
       'stt.enabled',
       'stt.echo_transcripts',

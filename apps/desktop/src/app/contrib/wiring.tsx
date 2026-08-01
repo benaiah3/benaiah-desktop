@@ -683,7 +683,9 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       emitGatewayEvent(event)
 
       if (event.type === 'wake.detected') {
-        const payload = event.payload as { profile?: null | string; start_new_session?: boolean } | undefined
+        const payload = event.payload as
+          | { profile?: null | string; start_new_session?: boolean; voice?: null | string }
+          | undefined
 
         // Audible confirmation that the wake registered, before voice capture
         // starts. Gated by the shared sound-mute toggle.
@@ -706,7 +708,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
           startFreshSessionDraft()
         }
 
-        requestVoiceConversationStart()
+        requestVoiceConversationStart(payload?.voice)
 
         return
       }

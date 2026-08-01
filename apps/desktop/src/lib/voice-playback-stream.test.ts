@@ -112,6 +112,19 @@ describe('streaming voice playback lifecycle', () => {
     unsubscribe()
   })
 
+  it('carries the wake-selected voice into the speech session URL', async () => {
+    const session = await startSpeechStream({
+      source: 'voice-conversation',
+      voice: 'en-GB-SoniaNeural'
+    })
+    const ws = FakeWebSocket.instances.at(-1)
+
+    expect(ws?.url).toContain('voice=en-GB-SoniaNeural')
+
+    stopVoicePlayback()
+    expect(await session?.done).toBe('cancelled')
+  })
+
   it('keeps cancellation distinct and stable across twenty consecutive turns', async () => {
     for (let turn = 0; turn < 20; turn += 1) {
       const session = await startSpeechStream({ messageId: `reply-${turn}`, source: 'voice-conversation' })
