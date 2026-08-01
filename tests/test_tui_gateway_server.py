@@ -7177,7 +7177,7 @@ def test_session_compress_uses_compress_helper(monkeypatch):
     emit.assert_any_call("status.update", "sid", {"kind": "status", "text": "ready"})
 
 
-def test_session_compress_normalizes_messages_for_desktop_transcript(monkeypatch):
+def test_session_compress_preserves_normalized_tool_result_for_desktop_transcript(monkeypatch):
     history = [
         {
             "role": "assistant",
@@ -7204,7 +7204,7 @@ def test_session_compress_normalizes_messages_for_desktop_transcript(monkeypatch
         server._sessions.pop("sid", None)
 
     assert response["result"]["messages"] == server._history_to_messages(history)
-    assert "very sensitive tool output" not in str(response["result"]["messages"])
+    assert response["result"]["messages"][-1]["text"] == "very sensitive tool output"
 
 
 def test_session_compress_returns_compute_host_history(monkeypatch):
