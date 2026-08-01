@@ -10,7 +10,14 @@ import { cn } from '@/lib/utils'
 import type { ConfigFieldSchema } from '@/types/hermes'
 
 import { ComboboxInput } from './combobox-input'
-import { CONTROL_TEXT, EMPTY_SELECT_VALUE, FIELD_DESCRIPTIONS, FIELD_LABELS, FREE_INPUT_KEYS } from './constants'
+import {
+  CONTROL_TEXT,
+  EMPTY_SELECT_VALUE,
+  FIELD_DESCRIPTIONS,
+  FIELD_LABELS,
+  FREE_INPUT_KEYS,
+  TOOLSET_DISPLAY_LABELS
+} from './constants'
 import { FallbackModelsField } from './fallback-models-field'
 import { fieldCopyForSchemaKey } from './field-copy'
 import { ListRow } from './primitives'
@@ -176,6 +183,21 @@ export function ConfigField({
   }
 
   if (schema.type === 'list') {
+    const displayListItem = (item: unknown) =>
+      schemaKey === 'toolsets' ? (TOOLSET_DISPLAY_LABELS[String(item)] ?? String(item)) : String(item)
+
+    const storedListItem = (item: string) => {
+      if (schemaKey !== 'toolsets') {
+        return item
+      }
+
+      const match = Object.entries(TOOLSET_DISPLAY_LABELS).find(
+        ([, displayLabel]) => displayLabel.toLocaleLowerCase() === item.toLocaleLowerCase()
+      )
+
+      return match?.[0] ?? item
+    }
+
     return row(
       <Input
         className={CONTROL_TEXT}
@@ -185,10 +207,11 @@ export function ConfigField({
               .split(',')
               .map(s => s.trim())
               .filter(Boolean)
+              .map(storedListItem)
           )
         }
         placeholder={c.commaSeparated}
-        value={Array.isArray(value) ? value.join(', ') : String(value ?? '')}
+        value={Array.isArray(value) ? value.map(displayListItem).join(', ') : displayListItem(value ?? '')}
       />
     )
   }

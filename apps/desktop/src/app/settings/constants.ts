@@ -38,6 +38,14 @@ interface ProviderPrefix {
 export const EMPTY_SELECT_VALUE = '__hermes_empty__'
 export const CONTROL_TEXT = 'text-xs'
 
+// Platform toolset IDs are runtime contracts and must stay stable in
+// config.yaml, but internal implementation names should not leak into the
+// public desktop UI. ConfigField maps these labels in both directions so the
+// editable list remains safe to change without persisting the branded alias.
+export const TOOLSET_DISPLAY_LABELS: Record<string, string> = {
+  'hermes-cli': 'Benaiah'
+}
+
 export const PROVIDER_GROUPS: ProviderPrefix[] = [
   {
     prefix: 'NOUS_',
