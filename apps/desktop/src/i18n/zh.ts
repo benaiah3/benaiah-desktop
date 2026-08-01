@@ -563,6 +563,9 @@ export const zh: Translations = {
         maxRecordingSeconds: '最长录音时长',
         autoTts: '朗读回复'
       },
+      wakeWord: {
+        phrase: '唤醒名称'
+      },
       stt: {
         enabled: '语音转文字',
         provider: '语音转文字提供方',
@@ -709,6 +712,9 @@ export const zh: Translations = {
       },
       voice: {
         autoTts: '自动朗读助手回复。'
+      },
+      wakeWord: {
+        phrase: '用于开始免手动对话的名称或短语。保存后立即生效。'
       },
       stt: {
         enabled: '启用本地或提供方支持的语音转写。',

@@ -6,6 +6,7 @@ import {
   applyWakeStatus,
   applyWakeStopResult,
   armWakeWord,
+  refreshWakeWordAfterConfigChange,
   resetWakeWordState,
   resumeWakeAfterVoice,
   toggleWakeWord,
@@ -231,6 +232,55 @@ describe('armWakeWord (gateway-ready auto-arm)', () => {
     expect(state.available).toBe(true)
     expect(state.listening).toBe(false)
     expect(state.notice).toBe('another surface owns the listener')
+  })
+})
+
+describe('refreshWakeWordAfterConfigChange', () => {
+  it('restarts an active GUI listener without changing the persisted enabled setting', async () => {
+    const calls: Array<[string, Record<string, unknown>]> = []
+    const request = requester((method, params = {}) => {
+      calls.push([method, params])
+
+      if (method === 'wake.status') {
+        return {
+          available: true,
+          enabled: true,
+          listening: true,
+          owner_surface: 'gui',
+          phrase: 'computer'
+        }
+      }
+
+      if (method === 'wake.stop') {
+        return { stopped: true }
+      }
+
+      return { phrase: 'computer', started: true }
+    })
+
+    await refreshWakeWordAfterConfigChange(request)
+
+    expect(calls).toEqual([
+      ['wake.status', {}],
+      ['wake.stop', { persist: false }],
+      ['wake.start', { surface: 'gui' }]
+    ])
+    expect($wakeWord.get()).toMatchObject({ listening: true, phrase: 'computer' })
+  })
+
+  it('does not restart a listener owned by another surface', async () => {
+    const request = requester(() => ({
+      available: true,
+      enabled: true,
+      listening: true,
+      owner_surface: 'tui',
+      phrase: 'computer'
+    }))
+
+    await refreshWakeWordAfterConfigChange(request)
+
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenCalledWith('wake.status', {})
   })
 })
 

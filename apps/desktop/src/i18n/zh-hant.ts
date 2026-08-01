@@ -439,6 +439,9 @@ export const zhHant = defineLocale({
         maxRecordingSeconds: '最長錄音時間',
         autoTts: '朗讀回覆'
       },
+      wakeWord: {
+        phrase: '喚醒名稱'
+      },
       stt: {
         enabled: '語音轉文字',
         provider: '語音轉文字提供方',
@@ -585,6 +588,9 @@ export const zhHant = defineLocale({
       },
       voice: {
         autoTts: '自動朗讀助手回覆。'
+      },
+      wakeWord: {
+        phrase: '用來開始免持對話的名稱或短語。儲存後立即生效。'
       },
       stt: {
         enabled: '啟用本機或提供方支援的語音轉寫。',

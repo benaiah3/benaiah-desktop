@@ -470,12 +470,21 @@ export const setConnection = (next: Updater<HermesConnection | null>) => updateA
 export const setGatewayState = (next: Updater<ConnectionState>) => updateAtom($gatewayState, next)
 
 function sanitizePublicSessionRows(rows: SessionInfo[]): SessionInfo[] {
-  return rows.map(session => {
+  let changed = false
+  const sanitized = rows.map(session => {
     const title = session.title == null ? session.title : sanitizeBenaiahPublicText(session.title)
     const preview = session.preview == null ? session.preview : sanitizeBenaiahPublicText(session.preview)
 
-    return title === session.title && preview === session.preview ? session : { ...session, title, preview }
+    if (title === session.title && preview === session.preview) {
+      return session
+    }
+
+    changed = true
+
+    return { ...session, title, preview }
   })
+
+  return changed ? sanitized : rows
 }
 
 export const setSessions = (next: Updater<SessionInfo[]>) =>

@@ -451,6 +451,9 @@ export const ja = defineLocale({
         maxRecordingSeconds: '最大録音時間',
         autoTts: '応答を読み上げる'
       },
+      wakeWord: {
+        phrase: '呼びかけ名'
+      },
       stt: {
         enabled: '音声認識',
         provider: '音声認識プロバイダー',
@@ -598,6 +601,9 @@ export const ja = defineLocale({
       },
       voice: {
         autoTts: 'アシスタントの応答を自動で読み上げます。'
+      },
+      wakeWord: {
+        phrase: 'ハンズフリー会話を開始するときに呼びかける名前またはフレーズです。保存後すぐに反映されます。'
       },
       stt: {
         enabled: 'ローカルまたはプロバイダーによる音声文字起こしを有効にします。',

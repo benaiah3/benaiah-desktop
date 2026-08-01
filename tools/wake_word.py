@@ -802,14 +802,18 @@ class _SttPhraseEngine(_Engine):
                 "(config.yaml stt.provider, usually local)."
             )
         self._phrase = wake_phrase(cfg)
-        # Map shared sensitivity (higher=stricter) onto an int16 peak gate for
-        # the rolling window (not a single frame). 0.5 → ~380.
+        # Map shared sensitivity (higher=stricter) onto an int16 peak gate.
+        # 0.5 → ~380. Speech is collected until a short trailing silence so
+        # a one-word wake name is never transcribed halfway through the word.
         self._energy = int(60 + 640 * _sensitivity(cfg))
         self._window_seconds = 2.4
-        self._min_interval = 1.1
+        self._end_silence_samples = int(0.3 * SAMPLE_RATE)
+        self._max_utterance_samples = int(2.0 * SAMPLE_RATE)
         self._max_samples = int(self._window_seconds * SAMPLE_RATE)
         self._buffer = bytearray()
-        self._last_probe = 0.0
+        self._speech_active = False
+        self._speech_samples = 0
+        self._silence_samples = 0
         self._lock = threading.Lock()
 
     def process(self, frame) -> bool:
@@ -823,17 +827,30 @@ class _SttPhraseEngine(_Engine):
             overflow = len(self._buffer) - (self._max_samples * 2)
             if overflow > 0:
                 del self._buffer[:overflow]
-            now = time.monotonic()
-            if now - self._last_probe < self._min_interval:
+
+            peak = int(np.max(np.abs(samples))) if samples.size else 0
+            if peak >= self._energy:
+                self._speech_active = True
+                self._silence_samples = 0
+            elif self._speech_active:
+                self._silence_samples += int(samples.size)
+
+            if not self._speech_active:
                 return False
-            if len(self._buffer) < int(1.2 * SAMPLE_RATE) * 2:
+
+            self._speech_samples += int(samples.size)
+            utterance_ended = self._silence_samples >= self._end_silence_samples
+            utterance_full = self._speech_samples >= self._max_utterance_samples
+            if not utterance_ended and not utterance_full:
                 return False
-            window = np.frombuffer(bytes(self._buffer), dtype=np.int16)
-            peak = int(np.max(np.abs(window))) if window.size else 0
-            if peak < self._energy:
-                return False
-            self._last_probe = now
+
             audio = bytes(self._buffer)
+            # Start the next utterance with a clean slate. The current audio is
+            # immutable, so transcription can safely happen outside the lock.
+            self._buffer.clear()
+            self._speech_active = False
+            self._speech_samples = 0
+            self._silence_samples = 0
 
         wav_path = ""
         try:
@@ -877,7 +894,9 @@ class _SttPhraseEngine(_Engine):
     def reset(self) -> None:
         with self._lock:
             self._buffer.clear()
-            self._last_probe = 0.0
+            self._speech_active = False
+            self._speech_samples = 0
+            self._silence_samples = 0
 
     def close(self) -> None:
         self.reset()
