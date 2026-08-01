@@ -1511,7 +1511,10 @@ _NO_SPEECH_PROB_THRESHOLD_DEFAULT = 0.6
 _LOGPROB_THRESHOLD_DEFAULT = -1.0
 
 
-def build_local_transcribe_kwargs(stt_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def build_local_transcribe_kwargs(
+    stt_config: Optional[Dict[str, Any]] = None,
+    initial_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
     """Build the kwargs for EVERY local faster-whisper ``model.transcribe`` call.
 
     Single owner for the anti-hallucination hardening — any new local-whisper
@@ -1546,9 +1549,9 @@ def build_local_transcribe_kwargs(stt_config: Optional[Dict[str, Any]] = None) -
     if forced_lang:
         kwargs["language"] = forced_lang
 
-    initial_prompt = local_cfg.get("initial_prompt")
-    if isinstance(initial_prompt, str) and initial_prompt.strip():
-        kwargs["initial_prompt"] = initial_prompt
+    prompt = initial_prompt if isinstance(initial_prompt, str) else local_cfg.get("initial_prompt")
+    if isinstance(prompt, str) and prompt.strip():
+        kwargs["initial_prompt"] = prompt.strip()
 
     return kwargs
 
@@ -1606,7 +1609,11 @@ def _join_confident_segments(segments: Any, local_cfg: Dict[str, Any]) -> str:
     return " ".join(kept).strip()
 
 
-def _transcribe_local(file_path: str, model_name: str) -> Dict[str, Any]:
+def _transcribe_local(
+    file_path: str,
+    model_name: str,
+    initial_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
     """Transcribe using faster-whisper (local, free)."""
     global _local_model, _local_model_name
 
@@ -1640,7 +1647,7 @@ def _transcribe_local(file_path: str, model_name: str) -> Dict[str, Any]:
         # every local faster-whisper call site.
         stt_config = _load_stt_config()
         local_config = stt_config.get("local") or {}
-        transcribe_kwargs = build_local_transcribe_kwargs(stt_config)
+        transcribe_kwargs = build_local_transcribe_kwargs(stt_config, initial_prompt)
 
         try:
             segments, info = _local_model.transcribe(file_path, **transcribe_kwargs)
@@ -2339,7 +2346,11 @@ def _transcribe_deepinfra(file_path: str, model_name: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _transcribe_prepared_audio(file_path: str, model: Optional[str] = None) -> Dict[str, Any]:
+def _transcribe_prepared_audio(
+    file_path: str,
+    model: Optional[str] = None,
+    initial_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Transcribe an audio file using the configured STT provider.
 
@@ -2350,6 +2361,8 @@ def _transcribe_prepared_audio(file_path: str, model: Optional[str] = None) -> D
     Args:
         file_path: Absolute path to the audio file to transcribe.
         model:     Override the model. If None, uses config or provider default.
+        initial_prompt: Optional vocabulary hint for local Whisper. Used by
+            wake-name spotting so uncommon names are decoded as entered.
 
     Returns:
         dict with keys:
@@ -2403,7 +2416,7 @@ def _transcribe_prepared_audio(file_path: str, model: Optional[str] = None) -> D
         model_name = _normalize_local_model(
             model or local_cfg.get("model", DEFAULT_LOCAL_MODEL)
         )
-        return _transcribe_local(file_path, model_name)
+        return _transcribe_local(file_path, model_name, initial_prompt)
 
     if provider == "local_command":
         local_cfg = stt_config.get("local") or {}
@@ -2509,7 +2522,11 @@ def _transcribe_prepared_audio(file_path: str, model: Optional[str] = None) -> D
     }
 
 
-def transcribe_audio(file_path: str, model: Optional[str] = None) -> Dict[str, Any]:
+def transcribe_audio(
+    file_path: str,
+    model: Optional[str] = None,
+    initial_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
     """Safely validate, preprocess supported inputs, and dispatch transcription."""
     # Refuse to feed a credential / secret store (auth.json, .env, OAuth
     # tokens, mcp-tokens/, ...) to an STT provider — before ANY validation or
@@ -2542,7 +2559,7 @@ def transcribe_audio(file_path: str, model: Optional[str] = None) -> Dict[str, A
         prepared_error = _validate_audio_file(prepared_path, enforce_size_limit=False)
         if prepared_error:
             return prepared_error
-        return _transcribe_prepared_audio(prepared_path, model)
+        return _transcribe_prepared_audio(prepared_path, model, initial_prompt)
     finally:
         if cleanup_dir:
             shutil.rmtree(cleanup_dir, ignore_errors=True)

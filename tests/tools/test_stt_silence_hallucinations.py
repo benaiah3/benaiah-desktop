@@ -48,6 +48,14 @@ class TestBuildLocalTranscribeKwargs:
         assert kwargs["language"] == "en"
         assert kwargs["initial_prompt"] == "Hermes glossary"
 
+    def test_per_call_prompt_overrides_global_prompt(self, monkeypatch):
+        monkeypatch.delenv("HERMES_LOCAL_STT_LANGUAGE", raising=False)
+        cfg = {"local": {"initial_prompt": "General glossary"}}
+
+        kwargs = build_local_transcribe_kwargs(cfg, "Wake name: Benaiah.")
+
+        assert kwargs["initial_prompt"] == "Wake name: Benaiah."
+
 
 class TestConfidenceGate:
     def test_high_no_speech_and_low_logprob_dropped(self):

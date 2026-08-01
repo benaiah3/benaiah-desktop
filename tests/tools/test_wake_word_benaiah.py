@@ -72,8 +72,8 @@ def test_stt_spotter_waits_for_one_word_to_end_before_transcribing(monkeypatch):
     monkeypatch.setattr(wake, "_stt_ready", lambda: True)
     calls = []
 
-    def transcribe(path):
-        calls.append(path)
+    def transcribe(path, **kwargs):
+        calls.append((path, kwargs))
         return {"success": True, "transcript": "Benaiah"}
 
     monkeypatch.setattr("tools.transcription_tools.transcribe_audio", transcribe)
@@ -86,6 +86,7 @@ def test_stt_spotter_waits_for_one_word_to_end_before_transcribing(monkeypatch):
     assert engine.process(silence) is False
     assert engine.process(silence) is True
     assert len(calls) == 1
+    assert calls[0][1] == {"initial_prompt": "Wake name: benaiah."}
 
 
 def test_stt_spotter_does_not_transcribe_ambient_silence(monkeypatch):

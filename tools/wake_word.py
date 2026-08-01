@@ -863,7 +863,14 @@ class _SttPhraseEngine(_Engine):
                 wav.writeframes(audio)
             from tools.transcription_tools import transcribe_audio
 
-            result = transcribe_audio(wav_path)
+            # Whisper otherwise treats an uncommon one-word proper name as
+            # ordinary dictation ("Benaiah" can decode as "the"). A per-call
+            # vocabulary hint biases only this wake probe; normal voice
+            # transcription and the user's global STT prompt stay untouched.
+            result = transcribe_audio(
+                wav_path,
+                initial_prompt=f"Wake name: {self._phrase}.",
+            )
             transcript = str((result or {}).get("transcript") or "")
             if not result or not result.get("success"):
                 logger.warning(
