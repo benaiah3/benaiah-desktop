@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { RemoteAccessHost, parseRelayFrame } from './remote-access-host'
+import { parseRelayFrame, RemoteAccessHost } from './remote-access-host'
 
 class FakeSocket {
   readyState = 0
@@ -22,16 +22,23 @@ class FakeSocket {
   }
 
   emit(type: string, event: any = {}) {
-    if (type === 'open') this.readyState = 1
-    for (const listener of this.listeners[type] || []) listener(event)
+    if (type === 'open') {
+      this.readyState = 1
+    }
+
+    for (const listener of this.listeners[type] || []) {
+      listener(event)
+    }
   }
 }
 
 test('parses only scoped relay frames', () => {
-  assert.deepEqual(
-    parseRelayFrame(JSON.stringify({ v: 1, type: 'relay.frame', channel: 'c1', payload: '{}' })),
-    { v: 1, type: 'relay.frame', channel: 'c1', payload: '{}' }
-  )
+  assert.deepEqual(parseRelayFrame(JSON.stringify({ v: 1, type: 'relay.frame', channel: 'c1', payload: '{}' })), {
+    v: 1,
+    type: 'relay.frame',
+    channel: 'c1',
+    payload: '{}'
+  })
   assert.equal(parseRelayFrame(JSON.stringify({ v: 1, type: 'relay.ready' })), null)
   assert.equal(parseRelayFrame('not-json'), null)
 })
@@ -40,13 +47,16 @@ test('registers the host and forwards one client channel to the loopback gateway
   const calls: Array<{ path: string; body: any }> = []
   const sockets: FakeSocket[] = []
   const statuses: string[] = []
+
   const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
     const body = JSON.parse(String(init?.body || '{}'))
     calls.push({ path, body })
+
     const payload = path.endsWith('/remote/ticket')
       ? { url: 'wss://relay.example/v1/connect', ticket: 'signed-ticket' }
       : { device: body }
+
     return new Response(JSON.stringify(payload), {
       status: path.endsWith('/remote/ticket') ? 201 : 201,
       headers: { 'Content-Type': 'application/json' }
@@ -64,6 +74,7 @@ test('registers the host and forwards one client channel to the loopback gateway
     socketFactory: () => {
       const socket = new FakeSocket()
       sockets.push(socket)
+
       return socket
     },
     onStatus: status => statuses.push(status.state)
@@ -90,10 +101,7 @@ test('registers the host and forwards one client channel to the loopback gateway
   assert.deepEqual(sockets[1].sent, ['{"jsonrpc":"2.0","id":1}'])
 
   sockets[1].emit('message', { data: '{"jsonrpc":"2.0","id":1,"result":{}}' })
-  assert.equal(
-    JSON.parse(sockets[0].sent[0]).payload,
-    '{"jsonrpc":"2.0","id":1,"result":{}}'
-  )
+  assert.equal(JSON.parse(sockets[0].sent[0]).payload, '{"jsonrpc":"2.0","id":1,"result":{}}')
   assert.deepEqual(statuses.slice(0, 2), ['connecting', 'online'])
   host.stop()
 })

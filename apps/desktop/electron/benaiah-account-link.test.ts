@@ -4,13 +4,11 @@ import { prepareBenaiahAccountLink } from './benaiah-account-link'
 
 describe('prepareBenaiahAccountLink', () => {
   it('carries a one-time account link directly into the matching remote Mac', () => {
-    const value = prepareBenaiahAccountLink(
-      'https://benaiah.ai/settings?code=one-time-code#profile',
-      {
-        deviceId: 'device_1234567890',
-        returnToRemote: true
-      }
-    )
+    const value = prepareBenaiahAccountLink('https://benaiah.ai/settings?code=one-time-code#profile', {
+      deviceId: 'device_1234567890',
+      returnToRemote: true
+    })
+
     const url = new URL(value)
 
     expect(url.origin).toBe('https://benaiah.ai')
@@ -22,8 +20,8 @@ describe('prepareBenaiahAccountLink', () => {
   })
 
   it('rejects an account link outside Benaiah', () => {
-    expect(() =>
-      prepareBenaiahAccountLink('https://example.com/settings?code=one-time-code#profile')
-    ).toThrow(/valid account link/i)
+    expect(() => prepareBenaiahAccountLink('https://example.com/settings?code=one-time-code#profile')).toThrow(
+      /valid account link/i
+    )
   })
 })

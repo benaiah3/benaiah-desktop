@@ -3931,9 +3931,7 @@ function resolveHermesBackend(backendArgs) {
     const sync = synchronizeManagedRuntime(ACTIVE_HERMES_ROOT, INSTALL_STAMP.commit)
 
     if (sync.state === 'updated') {
-      rememberLog(
-        `[runtime-sync] advanced managed Benaiah engine ${sync.from.slice(0, 12)} -> ${sync.to.slice(0, 12)}`
-      )
+      rememberLog(`[runtime-sync] advanced managed Benaiah engine ${sync.from.slice(0, 12)} -> ${sync.to.slice(0, 12)}`)
       writeBootstrapMarker({
         pinnedCommit: sync.to,
         pinnedBranch: INSTALL_STAMP.branch
@@ -6865,12 +6863,11 @@ function decryptDesktopSecret(secret) {
 // in Electron safeStorage while the browser hand-off is in progress.
 // ---------------------------------------------------------------------------
 
-const BENAIAH_ACCOUNT_GATEWAY =
-  process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah.ai/api/cli/v1'
-const BENAIAH_REMOTE_API =
-  process.env.BENAIAH_REMOTE_API || 'https://benaiah.ai/api'
-const BENAIAH_TRANSCRIPTION_API =
-  process.env.BENAIAH_TRANSCRIPTION_API || `${BENAIAH_REMOTE_API}/voice-session`
+const BENAIAH_ACCOUNT_GATEWAY = process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah.ai/api/cli/v1'
+
+const BENAIAH_REMOTE_API = process.env.BENAIAH_REMOTE_API || 'https://benaiah.ai/api'
+
+const BENAIAH_TRANSCRIPTION_API = process.env.BENAIAH_TRANSCRIPTION_API || `${BENAIAH_REMOTE_API}/voice-session`
 
 let benaiahRemoteHost: RemoteAccessHost | null = null
 let benaiahRemoteStatus: RemoteHostStatus = { state: 'stopped' }
@@ -6926,7 +6923,10 @@ async function transcribeWithBenaiah(dataUrl: string, mimeType = 'audio/webm') {
   }
 
   const audioBase64 = match[2].replace(/\s+/g, '')
-  const resolvedMimeType = String(mimeType || match[1] || 'audio/webm').split(';')[0].trim()
+
+  const resolvedMimeType = String(mimeType || match[1] || 'audio/webm')
+    .split(';')[0]
+    .trim()
 
   // Match the web/mobile service limit before allocating or sending a request.
   if (!audioBase64 || Math.ceil((audioBase64.length * 3) / 4) > 2_500_000) {
@@ -6943,6 +6943,7 @@ async function transcribeWithBenaiah(dataUrl: string, mimeType = 'audio/webm') {
     },
     timeoutMs: 90_000
   })
+
   const transcript = String(result?.text || '').trim()
 
   return result?.ok && transcript
@@ -7014,10 +7015,12 @@ function readOrCreateBenaiahRemoteIdentity(): BenaiahRemoteIdentity {
   }
 
   const { publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
+
   const identity = {
     deviceId: crypto.randomBytes(24).toString('base64url'),
     publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64url')
   }
+
   const target = benaiahRemoteIdentityPath()
 
   fs.mkdirSync(path.dirname(target), { recursive: true })
@@ -7069,10 +7072,13 @@ async function createBenaiahRemotePairing() {
   }
 
   startBenaiahRemoteAccess()
+
   for (let attempt = 0; attempt < 40 && benaiahRemoteStatus.state === 'connecting'; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 250))
   }
+
   const identity = readOrCreateBenaiahRemoteIdentity()
+
   const pairing: any = await fetchJson(`${BENAIAH_REMOTE_API}/remote/pair`, null, {
     method: 'POST',
     bearer: account.token,
@@ -7083,10 +7089,7 @@ async function createBenaiahRemotePairing() {
     timeoutMs: 15_000
   })
 
-  if (
-    !/^https:\/\/benaiah\.ai\/remote#pair=/.test(String(pairing?.url || ''))
-    || !pairing?.expiresAt
-  ) {
+  if (!/^https:\/\/benaiah\.ai\/remote#pair=/.test(String(pairing?.url || '')) || !pairing?.expiresAt) {
     throw new Error('Benaiah did not return a valid mobile pairing code.')
   }
 
@@ -7117,11 +7120,7 @@ function writeBenaiahAccountLink(token: string, linkUrl: string, expiresAt = '')
   const target = benaiahAccountLinkPath()
 
   fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.writeFileSync(
-    target,
-    JSON.stringify({ expiresAt, linkUrl, token: encryptDesktopSecret(token) }),
-    { mode: 0o600 }
-  )
+  fs.writeFileSync(target, JSON.stringify({ expiresAt, linkUrl, token: encryptDesktopSecret(token) }), { mode: 0o600 })
 }
 
 function clearBenaiahAccountLink() {
@@ -11124,9 +11123,7 @@ ipcMain.handle('hermes:openExternal', (_event, url) => {
 })
 
 ipcMain.handle('hermes:benaiah-account:start', () => beginBenaiahAccountLink())
-ipcMain.handle('hermes:benaiah-account:qr', () =>
-  beginBenaiahAccountLink({ openBrowser: false, returnToRemote: true })
-)
+ipcMain.handle('hermes:benaiah-account:qr', () => beginBenaiahAccountLink({ openBrowser: false, returnToRemote: true }))
 ipcMain.handle('hermes:benaiah-account:status', (_event, profile) => benaiahAccountLinkStatus(profile))
 ipcMain.handle('hermes:benaiah-account:reopen', () => reopenBenaiahAccountLink())
 ipcMain.handle('hermes:benaiah-account:transcribe', async (_event, payload) => {
@@ -11138,6 +11135,7 @@ ipcMain.handle('hermes:benaiah-account:transcribe', async (_event, payload) => {
         error instanceof Error ? error.message : String(error)
       }`
     )
+
     return null
   }
 })
@@ -12091,9 +12089,8 @@ function _extractDeepLink(argv) {
   }
 
   return (
-    argv.find(
-      a => typeof a === 'string' && SUPPORTED_PROTOCOLS.some(protocol => a.startsWith(`${protocol}://`))
-    ) || null
+    argv.find(a => typeof a === 'string' && SUPPORTED_PROTOCOLS.some(protocol => a.startsWith(`${protocol}://`))) ||
+    null
   )
 }
 
