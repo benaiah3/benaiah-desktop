@@ -79,6 +79,15 @@ describe('ComposerControls shortcut tooltips', () => {
   })
 })
 
+describe('speech-to-speech launcher', () => {
+  it('uses the living Junior Genie orb without changing the accessible action', () => {
+    renderControls({ hasComposerPayload: false })
+
+    const launcher = screen.getByLabelText('Start voice conversation')
+    expect(launcher.querySelector('[data-testid="junior-genie-orb"]')).toBeTruthy()
+  })
+})
+
 describe('wake-word ear visibility', () => {
   afterEach(() => {
     resetWakeWordState()

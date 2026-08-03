@@ -25,6 +25,67 @@
    (this variant) flatten everything into one shared scroll. See ChatSidebar. */
 @custom-variant compact (@media (max-height: 768px));
 
+/* Living speech-to-speech launcher shared with the Benaiah web experience. */
+.junior-genie-launcher {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  background: transparent !important;
+  color: transparent;
+}
+
+.junior-genie-launcher:hover {
+  background: transparent !important;
+}
+
+.junior-genie-orb {
+  position: absolute;
+  z-index: 0;
+  inset: -10%;
+  display: block;
+  border-radius: 9999px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 0.625rem rgb(10 10 10 / 14%));
+  transform: scale(0.985);
+  transform-origin: center;
+  animation: junior-genie-breathe 4.8s ease-in-out infinite;
+}
+
+.dark .junior-genie-orb {
+  filter: drop-shadow(0 0 0.625rem rgb(255 255 255 / 14%));
+}
+
+.junior-genie-orb-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.junior-genie-orb.is-fallback {
+  background:
+    radial-gradient(circle at 31% 24%, rgb(255 255 255 / 88%) 0 8%, transparent 28%),
+    radial-gradient(circle at 68% 72%, rgb(255 255 255 / 35%), transparent 38%),
+    conic-gradient(from 215deg, #0a0a0b, #44464a, #f1f1f1, #202124, #0a0a0b);
+}
+
+.dark .junior-genie-orb.is-fallback {
+  background:
+    radial-gradient(circle at 31% 24%, rgb(255 255 255 / 32%) 0 6%, transparent 26%),
+    radial-gradient(circle at 68% 72%, rgb(255 255 255 / 12%), transparent 38%),
+    conic-gradient(from 215deg, #000, #151515, #515151, #090909, #000);
+}
+
+@keyframes junior-genie-breathe {
+  0%,
+  100% {
+    transform: scale(0.985);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
 @font-face {
   font-family: 'Collapse';
   font-style: normal;
