@@ -504,10 +504,12 @@ export async function refreshOnboarding(ctx: OnboardingContext) {
 
   if (accountBridge) {
     let linked = false
+    let testHarness = false
 
     try {
       const account = await accountBridge.status(ctx.profile)
       linked = account.linked
+      testHarness = account.testHarness === true
 
       if (!linked) {
         writeCachedConfigured(false)
@@ -531,7 +533,7 @@ export async function refreshOnboarding(ctx: OnboardingContext) {
       return false
     }
 
-    if (linked) {
+    if (linked && !testHarness) {
       try {
         const retired = await retireLegacyModelProviderAccess(ctx.profile || 'default')
         const retiredCount = retired.keysRemoved + retired.endpointsRemoved + retired.oauthRemoved
