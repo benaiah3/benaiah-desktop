@@ -294,7 +294,10 @@ export function DesktopOnboardingOverlay({
   // immediately — no runtime gate needed. Otherwise wait for the readiness
   // check (configured === false) before showing the picker.
   const ready = onboarding.manual || (enabled && onboarding.configured === false)
-  const accountFirstRun = !onboarding.manual && !onboarding.localEndpoint
+  // The public desktop has one inference setup route. Manual launches from
+  // settings and model surfaces reuse the same Benaiah account sign-in instead
+  // of reopening the legacy provider/API-key picker.
+  const managedAccountFlow = !onboarding.localEndpoint
   const showPicker = flow.status === 'idle' || flow.status === 'success'
   // The final "you're in" screen drops the card chrome and floats centered on
   // the surface — same bare, cinematic treatment as the connecting overlay.
@@ -323,7 +326,7 @@ export function DesktopOnboardingOverlay({
             : 'translate-y-0 scale-100 opacity-100 blur-0'
         )}
       >
-        {accountFirstRun ? null : showPicker || !ready ? <Header /> : null}
+        {managedAccountFlow ? null : showPicker || !ready ? <Header /> : null}
         {onboarding.manual ? (
           <Button
             aria-label={t.common.close}
@@ -338,7 +341,7 @@ export function DesktopOnboardingOverlay({
         <div className="grid gap-3 p-5">
           {reason ? <ReasonNotice reason={reason} /> : null}
           {ready ? (
-            accountFirstRun ? (
+            managedAccountFlow ? (
               <BenaiahAccountFirstRun ctx={ctx} />
             ) : showPicker ? (
               <Picker ctx={ctx} />

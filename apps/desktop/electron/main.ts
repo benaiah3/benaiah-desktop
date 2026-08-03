@@ -7212,6 +7212,17 @@ async function benaiahAccountLinkStatus(profile?: string) {
     const account = readBenaiahAccount()
 
     if (account) {
+      // Benaiah Desktop is a managed inference surface. Re-assert the managed
+      // route whenever account state is checked so an older BYOK selection in
+      // config.yaml cannot survive an application update or profile switch.
+      await requestJsonForProfile(profile || 'default', '/api/model/set', 'POST', {
+        scope: 'main',
+        provider: 'custom',
+        model: 'benaiah-auto',
+        base_url: BENAIAH_ACCOUNT_GATEWAY,
+        api_key: account.token,
+        api_mode: 'codex_responses'
+      } as any)
       startBenaiahRemoteAccess()
     }
 

@@ -22,7 +22,17 @@ describe('requestModelOptions', () => {
       request: vi.fn(() => Promise.resolve(gatewayPayload))
     }
 
-    await expect(requestModelOptions({ gateway: gateway as never, sessionId: null })).resolves.toBe(gatewayPayload)
+    await expect(requestModelOptions({ gateway: gateway as never, sessionId: null })).resolves.toEqual({
+      model: 'benaiah-auto',
+      provider: 'custom',
+      providers: [
+        expect.objectContaining({
+          models: ['benaiah-auto'],
+          name: 'Benaiah Auto',
+          slug: 'custom'
+        })
+      ]
+    })
 
     expect(gateway.request).toHaveBeenCalledWith('model.options', { explicit_only: true })
     expect(getGlobalModelOptions).not.toHaveBeenCalled()

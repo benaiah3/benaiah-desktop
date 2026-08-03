@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DisclosureCaret } from '@/components/ui/disclosure-caret'
@@ -39,7 +38,6 @@ interface ModelVisibilityDialogProps {
 export function ModelVisibilityDialog({
   gw,
   onOpenChange,
-  onOpenProviders,
   open,
   profile = 'default',
   sessionId
@@ -166,21 +164,6 @@ export function ModelVisibilityDialog({
               )
             })
           )}
-        </div>
-
-        <div className="px-3 py-2">
-          <Button
-            className="-ml-2 text-(--ui-text-tertiary)"
-            onClick={() => {
-              onOpenChange(false)
-              onOpenProviders()
-            }}
-            size="xs"
-            type="button"
-            variant="text"
-          >
-            {copy.addProvider}
-          </Button>
         </div>
       </DialogContent>
     </Dialog>
