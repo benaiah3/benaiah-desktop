@@ -6997,6 +6997,24 @@ function readLegacyBenaiahAccountToken(): string {
   }
 }
 
+function readCurrentBenaiahManagedModel(): string {
+  try {
+    const config = fs.readFileSync(path.join(HERMES_HOME, 'config.yaml'), 'utf8')
+    const modelBlock = config.match(/^model:\s*\n((?:^[ \t]+.*\n?)*)/m)?.[1] || ''
+    const provider = modelBlock.match(/^[ \t]+provider:\s*["']?([^"'#\n]+)["']?/m)?.[1]?.trim() || ''
+    const baseUrl = modelBlock.match(/^[ \t]+base_url:\s*["']?([^"'#\n]+)["']?/m)?.[1]?.trim() || ''
+    const model = modelBlock.match(/^[ \t]+default:\s*["']?([^"'#\n]+)["']?/m)?.[1]?.trim() || ''
+
+    return provider === 'custom' &&
+      /benaiah(?:-cli-gateway[^/]*)?(?:\.ai|\.vercel\.app)/i.test(baseUrl) &&
+      /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(model)
+      ? model
+      : ''
+  } catch {
+    return ''
+  }
+}
+
 function migrateLegacyBenaiahAccount() {
   if (readBenaiahAccount()) {
     return
@@ -7215,10 +7233,12 @@ async function benaiahAccountLinkStatus(profile?: string) {
       // Benaiah Desktop is a managed inference surface. Re-assert the managed
       // route whenever account state is checked so an older BYOK selection in
       // config.yaml cannot survive an application update or profile switch.
+      // Preserve a model already routed through Benaiah: managed access means
+      // no provider keys or subscriptions, not removing model choice.
       await requestJsonForProfile(profile || 'default', '/api/model/set', 'POST', {
         scope: 'main',
         provider: 'custom',
-        model: 'benaiah-auto',
+        model: readCurrentBenaiahManagedModel() || 'benaiah-auto',
         base_url: BENAIAH_ACCOUNT_GATEWAY,
         api_key: account.token,
         api_mode: 'codex_responses'

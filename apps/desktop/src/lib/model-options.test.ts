@@ -16,19 +16,30 @@ describe('requestModelOptions', () => {
   })
 
   it('uses the connected gateway even before a session exists', async () => {
-    const gatewayPayload = { model: 'BeastMode', provider: 'moa', providers: [] }
+    const gatewayPayload = {
+      model: 'deepseek-v4-flash',
+      provider: 'custom',
+      providers: [
+        {
+          api_url: 'https://benaiah.ai/api/cli/v1',
+          models: ['benaiah-auto', 'gpt-5.6-sol', 'deepseek-v4-flash'],
+          name: 'Benaiah',
+          slug: 'custom'
+        }
+      ]
+    }
 
     const gateway = {
       request: vi.fn(() => Promise.resolve(gatewayPayload))
     }
 
     await expect(requestModelOptions({ gateway: gateway as never, sessionId: null })).resolves.toEqual({
-      model: 'benaiah-auto',
+      model: 'deepseek-v4-flash',
       provider: 'custom',
       providers: [
         expect.objectContaining({
-          models: ['benaiah-auto'],
-          name: 'Benaiah Auto',
+          models: ['benaiah-auto', 'gpt-5.6-sol', 'deepseek-v4-flash'],
+          name: 'Benaiah',
           slug: 'custom'
         })
       ]

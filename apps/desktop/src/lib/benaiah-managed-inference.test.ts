@@ -8,16 +8,16 @@ import {
 } from './benaiah-managed-inference'
 
 describe('Benaiah managed inference policy', () => {
-  it('exposes only the managed route even when direct providers are configured', () => {
+  it('hides direct providers and preserves the live Benaiah catalogue', () => {
     const result = benaiahManagedModelOptions({
-      model: 'claude-opus-4',
-      provider: 'anthropic',
+      model: 'gpt-5.6-sol',
+      provider: 'custom',
       providers: [
         { authenticated: true, models: ['claude-opus-4'], name: 'Anthropic', slug: 'anthropic' },
         {
           api_url: 'https://benaiah.ai/api/cli/v1',
           authenticated: true,
-          models: ['benaiah-auto', 'legacy-direct-model'],
+          models: ['benaiah-auto', 'gpt-5.6-sol', 'deepseek-v4-flash'],
           name: 'Custom',
           slug: 'custom'
         }
@@ -25,9 +25,14 @@ describe('Benaiah managed inference policy', () => {
     })
 
     expect(result.provider).toBe(BENAIAH_MANAGED_PROVIDER)
-    expect(result.model).toBe(BENAIAH_MANAGED_MODEL)
+    expect(result.model).toBe('gpt-5.6-sol')
     expect(result.providers).toHaveLength(1)
-    expect(result.providers?.[0].models).toEqual([BENAIAH_MANAGED_MODEL])
+    expect(result.providers?.[0]).toMatchObject({
+      featured_models: ['benaiah-auto', 'gpt-5.6-sol', 'deepseek-v4-flash'],
+      models: ['benaiah-auto', 'gpt-5.6-sol', 'deepseek-v4-flash'],
+      name: 'Benaiah',
+      total_models: 3
+    })
   })
 
   it('creates the managed row while the account is awaiting activation', () => {
@@ -37,7 +42,7 @@ describe('Benaiah managed inference policy', () => {
       expect.objectContaining({
         authenticated: true,
         models: [BENAIAH_MANAGED_MODEL],
-        name: 'Benaiah Auto',
+        name: 'Benaiah',
         slug: BENAIAH_MANAGED_PROVIDER
       })
     ])
@@ -46,6 +51,13 @@ describe('Benaiah managed inference policy', () => {
   it('normalizes stale model info from an earlier BYOK installation', () => {
     expect(benaiahManagedModelInfo({ model: 'gpt-5', provider: 'openai' })).toEqual({
       model: BENAIAH_MANAGED_MODEL,
+      provider: BENAIAH_MANAGED_PROVIDER
+    })
+  })
+
+  it('preserves a model already routed through Benaiah', () => {
+    expect(benaiahManagedModelInfo({ model: 'deepseek-v4-flash', provider: 'custom' })).toEqual({
+      model: 'deepseek-v4-flash',
       provider: BENAIAH_MANAGED_PROVIDER
     })
   })
