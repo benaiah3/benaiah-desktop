@@ -160,6 +160,7 @@ declare global {
           email?: string
           linked: boolean
           pending: boolean
+          testHarness?: boolean
         }>
         reopen: () => Promise<{ opened: boolean }>
         transcribe: (

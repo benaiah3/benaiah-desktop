@@ -8,6 +8,7 @@ export interface ReleaseUpdaterLike {
   autoRunAppAfterInstall: boolean
   disableWebInstaller: boolean
   fullChangelog: boolean
+  updateConfigPath: string | null
   setFeedURL(options: {
     owner: string
     provider: 'github'
@@ -41,6 +42,7 @@ export interface ReleaseUpdaterControllerOptions {
   currentVersion: () => string
   emitProgress: (progress: ReleaseUpdateProgress) => void
   log: (message: string) => void
+  updateConfigPath: string
   updater: ReleaseUpdaterLike
 }
 
@@ -81,11 +83,14 @@ export function createReleaseUpdaterController({
   currentVersion,
   emitProgress,
   log,
+  updateConfigPath,
   updater
 }: ReleaseUpdaterControllerOptions) {
-  // Set the reviewed Benaiah release feed in code as well as packaging it in
-  // app-update.yml. This keeps update discovery self-healing if an internally
-  // staged app bundle is installed without electron-builder's generated file.
+  // electron-updater reads the configuration again when it creates the cache
+  // directory for a download. Setting only the feed URL is enough for checks,
+  // but not downloads when an internally staged bundle is missing
+  // app-update.yml. Point both phases at the same verified configuration.
+  updater.updateConfigPath = updateConfigPath
   updater.setFeedURL({
     owner: 'benaiah3',
     provider: 'github',

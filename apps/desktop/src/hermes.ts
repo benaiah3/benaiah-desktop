@@ -1,5 +1,9 @@
 import { JsonRpcGatewayClient } from '@hermes/shared'
 
+import {
+  benaiahManagedModelInfo,
+  benaiahManagedModelOptions
+} from '@/lib/benaiah-managed-inference'
 import type {
   ActionResponse,
   ActionStatusResponse,
@@ -656,12 +660,14 @@ export function renameSession(
   })
 }
 
-export function getGlobalModelInfo(): Promise<ModelInfoResponse> {
-  return window.hermesDesktop.api<ModelInfoResponse>({
+export async function getGlobalModelInfo(): Promise<ModelInfoResponse> {
+  const response = await window.hermesDesktop.api<ModelInfoResponse>({
     ...profileScoped(),
     path: '/api/model/info',
     timeoutMs: STARTUP_REQUEST_TIMEOUT_MS
   })
+
+  return benaiahManagedModelInfo(response)
 }
 
 export function getStatus(): Promise<StatusResponse> {
@@ -1433,7 +1439,7 @@ export function getUsageAnalytics(days = 30): Promise<AnalyticsResponse> {
   })
 }
 
-export function getGlobalModelOptions(opts?: {
+export async function getGlobalModelOptions(opts?: {
   refresh?: boolean
   includeUnconfigured?: boolean
   explicitOnly?: boolean
@@ -1452,11 +1458,13 @@ export function getGlobalModelOptions(opts?: {
     params.set('explicit_only', '1')
   }
 
-  return window.hermesDesktop.api<ModelOptionsResponse>({
+  const response = await window.hermesDesktop.api<ModelOptionsResponse>({
     ...profileScoped(),
     path: params.size > 0 ? `/api/model/options?${params.toString()}` : '/api/model/options',
     timeoutMs: STARTUP_REQUEST_TIMEOUT_MS
   })
+
+  return benaiahManagedModelOptions(response)
 }
 
 export interface RecommendedDefaultModel {

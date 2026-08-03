@@ -17,6 +17,8 @@ import { evaluateRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/run
 import { notify, notifyError } from '@/store/notifications'
 import type { ModelOptionProvider, OAuthProvider, OAuthStartResponse } from '@/types/hermes'
 
+import { retireLegacyModelProviderAccess } from './benaiah-managed-inference'
+
 type PkceStart = Extract<OAuthStartResponse, { flow: 'pkce' }>
 type DeviceStart = Extract<OAuthStartResponse, { flow: 'device_code' }>
 
@@ -415,7 +417,6 @@ export function startManualOnboarding(reason: null | string = DEFAULT_MANUAL_ONB
     reason: reason ? reason.trim() || DEFAULT_ONBOARDING_REASON : null,
     flow: { status: 'idle' }
   })
-  void refreshProviders()
 }
 
 // Open the onboarding overlay directly on the local / custom endpoint form
@@ -426,14 +427,7 @@ export function startManualOnboarding(reason: null | string = DEFAULT_MANUAL_ONB
 // re-show the picker — the original "booted back to the first screen" loop).
 export function startManualLocalEndpoint(reason: null | string = null) {
   pendingProviderOAuthId = null
-  patch({
-    manual: true,
-    requested: true,
-    localEndpoint: true,
-    mode: 'apikey',
-    reason: reason ? reason.trim() || DEFAULT_ONBOARDING_REASON : null,
-    flow: { status: 'idle' }
-  })
+  startManualOnboarding(reason)
 }
 
 // One-shot hand-off used when the dedicated Providers settings page launches a
@@ -444,8 +438,8 @@ export function startManualLocalEndpoint(reason: null | string = null) {
 // overlay render and never needs to persist or re-render anything itself.
 let pendingProviderOAuthId: null | string = null
 
-export function startManualProviderOAuth(providerId: string, reason: null | string = null) {
-  pendingProviderOAuthId = providerId
+export function startManualProviderOAuth(_providerId: string, reason: null | string = null) {
+  pendingProviderOAuthId = null
   startManualOnboarding(reason)
 }
 
@@ -506,14 +500,68 @@ export function setOnboardingMode(mode: OnboardingMode) {
 }
 
 export async function refreshOnboarding(ctx: OnboardingContext) {
-  // Manual mode (user opened the selector from a working app): never
-  // auto-dismiss on runtime-ready — the whole point is to let them add /
-  // switch a provider while already configured. Just ensure the provider
-  // list is loaded and show the picker.
-  if ($desktopOnboarding.get().manual) {
-    await refreshProviders()
+  const accountBridge = window.hermesDesktop?.benaiahAccount
 
-    return false
+  if (accountBridge) {
+    let linked = false
+    let testHarness = false
+
+    try {
+      const account = await accountBridge.status(ctx.profile)
+      linked = account.linked
+      testHarness = account.testHarness === true
+
+      if (!linked) {
+        writeCachedConfigured(false)
+        patch({
+          configured: false,
+          localEndpoint: false,
+          mode: 'oauth',
+          providers: null,
+          reason: 'Connect your Benaiah account to use managed models.'
+        })
+
+        return false
+      }
+    } catch (error) {
+      writeCachedConfigured(false)
+      patch({
+        configured: false,
+        reason: error instanceof Error ? error.message : 'Benaiah could not verify your managed model access.'
+      })
+
+      return false
+    }
+
+    if (linked && !testHarness) {
+      try {
+        const retired = await retireLegacyModelProviderAccess(ctx.profile || 'default')
+        const retiredCount = retired.keysRemoved + retired.endpointsRemoved + retired.oauthRemoved
+
+        if (!retired.skipped && retiredCount > 0) {
+          notify({
+            durationMs: 7_000,
+            kind: 'info',
+            title: 'Model access is now managed by Benaiah',
+            message: `Removed ${retiredCount} legacy model-provider connection${retiredCount === 1 ? '' : 's'}. Your tool and connector credentials were preserved.`
+          })
+        }
+      } catch (error) {
+        // Cleanup must never lock a linked user out. Leave the migration marker
+        // unset so the next launch retries, and keep the managed route active.
+        notifyError(error, 'Some legacy model-provider credentials could not be removed yet')
+      }
+    }
+  }
+
+  // Manual mode (user opened the selector from a working app): never
+  // auto-dismiss before the managed account check above. Once the account is
+  // linked, the manual surface has completed its only supported setup path.
+  if ($desktopOnboarding.get().manual) {
+    completeDesktopOnboarding()
+    ctx.onCompleted?.()
+
+    return true
   }
 
   const runtime = await checkRuntime(ctx)

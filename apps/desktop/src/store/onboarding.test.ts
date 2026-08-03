@@ -233,6 +233,23 @@ describe('refreshOnboarding', () => {
     })
   })
 
+  it('lets the isolated E2E harness exercise its mock provider without retiring it', async () => {
+    const api = vi.fn()
+    const status = vi.fn().mockResolvedValue({ linked: true, pending: false, testHarness: true })
+
+    Object.defineProperty(window, 'hermesDesktop', {
+      configurable: true,
+      value: { api, benaiahAccount: { status } }
+    })
+
+    const ready = await refreshOnboarding(onboardingContext(keylessCustomGateway()))
+
+    expect(ready).toBe(true)
+    expect(status).toHaveBeenCalledWith(undefined)
+    expect(api).not.toHaveBeenCalled()
+    expect($desktopOnboarding.get().configured).toBe(true)
+  })
+
   it('does not preserve configured when onboarding was explicitly requested', async () => {
     const api = vi.fn(async ({ path }: { path: string }) => {
       if (path === '/api/providers/oauth') {

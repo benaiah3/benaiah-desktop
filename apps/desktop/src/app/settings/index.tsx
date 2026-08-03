@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import { codiconIcon } from '@/components/ui/codicon'
 import { Tip } from '@/components/ui/tooltip'
 import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
@@ -16,6 +15,7 @@ import {
   Keyboard,
   KeyRound,
   Package,
+  QrCode,
   RefreshCw,
   Settings2,
   Upload,
@@ -40,7 +40,7 @@ import { KeybindSettings } from './keybind-settings'
 import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
 import { NotificationsSettings } from './notifications-settings'
 import { PluginsSettings } from './plugins-settings'
-import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from './providers-settings'
+import { ProvidersSettings } from './providers-settings'
 import { RemoteSettings } from './remote-settings'
 import { SessionsSettings } from './sessions-settings'
 import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
@@ -79,9 +79,6 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
   }, [navigate, search])
 
   const [activeView, setActiveView] = useRouteEnumParam('tab', SETTINGS_VIEWS, 'config:model' as SettingsViewId)
-  // Providers subnav (Accounts vs API keys) lives in its own param so each
-  // sub-view is deep-linkable and survives a refresh.
-  const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'accounts')
   const [keysView] = useRouteEnumParam<KeysView>('kview', KEYS_VIEWS, 'tools')
 
   // Jump to a section + its sub-view in one navigate. Two sequential setters
@@ -102,11 +99,6 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
       navigate({ hash, pathname, search: qs ? `?${qs}` : '' }, { replace: true })
     },
     [hash, navigate, pathname, search]
-  )
-
-  const openProviderView = useCallback(
-    (view: ProviderView) => openSubView('providers', 'pview', view, 'accounts'),
-    [openSubView]
   )
 
   const openKeysView = useCallback((view: KeysView) => openSubView('keys', 'kview', view, 'tools'), [openSubView])
@@ -172,33 +164,10 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
       },
       {
         active: activeView === 'providers',
-        children: [
-          {
-            active: activeView === 'providers' && providerView === 'accounts',
-            icon: codiconIcon('account'),
-            id: 'pview:accounts',
-            label: t.settings.nav.providerAccounts,
-            onSelect: () => openProviderView('accounts')
-          },
-          {
-            active: activeView === 'providers' && providerView === 'keys',
-            icon: KeyRound,
-            id: 'pview:keys',
-            label: t.settings.nav.providerApiKeys,
-            onSelect: () => openProviderView('keys')
-          },
-          {
-            active: activeView === 'providers' && providerView === 'custom-endpoints',
-            icon: Globe,
-            id: 'pview:custom-endpoints',
-            label: t.settings.nav.providerCustomEndpoints,
-            onSelect: () => openProviderView('custom-endpoints')
-          }
-        ],
         gapBefore: true,
         icon: Zap,
         id: 'providers',
-        label: t.settings.nav.providers,
+        label: t.settings.nav.providerAccounts,
         onSelect: () => setActiveView('providers')
       },
       {
@@ -207,6 +176,13 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         id: 'gateway',
         label: t.settings.nav.gateway,
         onSelect: () => setActiveView('gateway')
+      },
+      {
+        active: activeView === 'remote',
+        icon: QrCode,
+        id: 'remote',
+        label: t.settings.nav.remote,
+        onSelect: () => setActiveView('remote')
       },
       {
         active: activeView === 'keybinds',
@@ -261,7 +237,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         onSelect: () => setActiveView('about')
       }
     ],
-    [activeView, keysView, providerView, t, setActiveView, openProviderView, openKeysView]
+    [activeView, keysView, t, setActiveView, openKeysView]
   )
 
   const navFooter = (
@@ -318,11 +294,8 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
             />
           ) : activeView === 'providers' ? (
             <ProvidersSettings
-              onClose={onClose}
               onConfigSaved={onConfigSaved}
               onMainModelChanged={onMainModelChanged}
-              onViewChange={setProviderView}
-              view={providerView}
             />
           ) : activeView === 'keys' ? (
             <KeysSettings view={keysView} />

@@ -1,22 +1,12 @@
 import { useStore } from '@nanostores/react'
 
+import { JuniorGenieOrb } from '@/components/junior-genie-orb'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import {
-  AudioLines,
-  Ear,
-  EarOff,
-  iconSize,
-  Layers3,
-  Loader2,
-  Square,
-  SteeringWheel,
-  Volume2,
-  VolumeX
-} from '@/lib/icons'
+import { Ear, EarOff, iconSize, Layers3, Loader2, Square, SteeringWheel, Volume2, VolumeX } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { $wakeWord, toggleWakeWord } from '@/store/wake-word'
 
@@ -114,7 +104,7 @@ export function ComposerControls({
         <Tip label={c.startVoice}>
           <Button
             aria-label={c.startVoice}
-            className={PRIMARY_ICON_BTN}
+            className={cn(PRIMARY_ICON_BTN, 'junior-genie-launcher')}
             disabled={disabled}
             onClick={() => {
               triggerHaptic('open')
@@ -123,7 +113,7 @@ export function ComposerControls({
             size="icon"
             type="button"
           >
-            <AudioLines className={iconSize.sm} />
+            <JuniorGenieOrb />
           </Button>
         </Tip>
       ) : (

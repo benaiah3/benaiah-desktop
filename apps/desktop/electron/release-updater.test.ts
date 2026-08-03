@@ -12,6 +12,7 @@ class FakeUpdater extends EventEmitter implements ReleaseUpdaterLike {
   autoRunAppAfterInstall = false
   disableWebInstaller = false
   fullChangelog = true
+  updateConfigPath: string | null = null
   setFeedURL = vi.fn()
   checkForUpdates = vi.fn()
   downloadUpdate = vi.fn()
@@ -58,16 +59,19 @@ describe('release updater', () => {
     })
 
     const emitProgress = vi.fn()
+
     const controller = createReleaseUpdaterController({
       currentVersion: () => '0.20.1',
       emitProgress,
       log: vi.fn(),
+      updateConfigPath: '/tmp/benaiah-app-update.yml',
       updater
     })
 
     expect(updater.autoDownload).toBe(false)
     expect(updater.allowPrerelease).toBe(false)
     expect(updater.disableWebInstaller).toBe(true)
+    expect(updater.updateConfigPath).toBe('/tmp/benaiah-app-update.yml')
     expect(updater.setFeedURL).toHaveBeenCalledWith({
       owner: 'benaiah3',
       provider: 'github',
