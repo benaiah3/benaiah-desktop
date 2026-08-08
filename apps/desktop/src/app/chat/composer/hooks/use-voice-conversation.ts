@@ -265,7 +265,7 @@ export function useVoiceConversation({
   }, [handle, handleTurn, onFatalError, voiceCopy.couldNotStartSession, voiceCopy.microphoneFailed])
 
   const settleAfterSpeech = useCallback(
-    (barged: boolean) => {
+    (barged: boolean, stoppedDuringSetup = false) => {
       if (barged || !awaitingSpokenResponseRef.current) {
         awaitingSpokenResponseRef.current = false
         consumePendingResponse()
@@ -289,7 +289,7 @@ export function useVoiceConversation({
       // stopVoicePlayback() calls (Edge speak-stream fallback, stream open,
       // barge reclaim) bump the playback sequence too — treating those as
       // "user stopped" left voice chat one-shot after the first reply.
-      const stoppedByUser = consumeUserStopRequested()
+      const stoppedByUser = stoppedDuringSetup || consumeUserStopRequested()
 
       if (enabledRef.current && !stoppedByUser) {
         pendingStartRef.current = true
@@ -469,10 +469,11 @@ export function useVoiceConversation({
         // this is a safety net for read-aloud-style entries into the loop.
         ensureBargeMonitor()
 
-        void playSpeechText(response.text, {
+        const playback = playSpeechText(response.text, {
           source: 'voice-conversation',
           ...(voice?.trim() ? { voice: voice.trim() } : {})
         })
+        void playback
           .catch(error => notifyError(error, voiceCopy.playbackFailed))
           .finally(() => {
             if (responseIdRef.current === responseId) {
@@ -494,6 +495,8 @@ export function useVoiceConversation({
    */
   const openLiveSpeech = useCallback(
     (responseId: string) => {
+      const sequenceBeforeStart = $voicePlayback.get().sequence
+
       responseIdRef.current = responseId
       spokenSourceLengthRef.current = 0
       // Drop any stale Stop latch from a previous turn before we speak.
@@ -522,6 +525,16 @@ export function useVoiceConversation({
         }
 
         if (!session) {
+          // Stream discovery can also fail after an explicit Stop landed
+          // during its async URL lookup. In that case, do not turn the stopped
+          // live attempt into fresh fallback playback.
+          if ($voicePlayback.get().sequence > sequenceBeforeStart) {
+            awaitingSpokenResponseRef.current = false
+            settleAfterSpeech(false, true)
+
+            return
+          }
+
           // No streaming backend/provider: speak the whole reply once it lands.
           speechSessionRef.current = null
           awaitFallbackSpeech(responseId)
@@ -529,7 +542,22 @@ export function useVoiceConversation({
           return
         }
 
+        // startSpeechStream calls stopVoicePlayback once after its async URL
+        // lookup. A second sequence bump means the user pressed Stop while
+        // setup was still pending. Do not absorb that explicit stop into the
+        // post-start baseline or allow the new session to play.
+        const sequenceAfterStart = $voicePlayback.get().sequence
+        const stoppedDuringStart = sequenceAfterStart > sequenceBeforeStart + 1
+
         speechSessionRef.current = session
+
+        if (stoppedDuringStart) {
+          stopVoicePlayback()
+          awaitingSpokenResponseRef.current = false
+          settleAfterSpeech(false, true)
+
+          return
+        }
 
         // Timer-driven feed: reply text flows into the session at delta rate
         // regardless of React render cadence.

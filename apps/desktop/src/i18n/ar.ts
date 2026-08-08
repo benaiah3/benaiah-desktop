@@ -117,6 +117,7 @@ export const ar = defineLocale({
     errors: {
       elevenLabsNeedsKey: 'يتطلب ElevenLabs STT المفتاح ELEVENLABS_API_KEY.',
       elevenLabsRejectedKey: 'رفض ElevenLabs مفتاح API (401).',
+      diskFull: 'القرص ممتلئ — حرّر مساحة ثم أعد المحاولة.',
       methodNotAllowed: 'رفضت خلفية سطح المكتب هذا الطلب (405 Method Not Allowed). جرب إعادة تشغيل Benaiah Desktop.',
       microphonePermission: 'تم رفض إذن الميكروفون.',
       openaiRejectedApiKey: 'رفض OpenAI مفتاح API.',
@@ -1662,6 +1663,7 @@ export const ar = defineLocale({
     newSessionPlaceholders: ['اسأل Benaiah عن شيء...', 'اطلب من Benaiah تنفيذ مهمة...', 'ابدأ محادثة جديدة...'],
     followUpPlaceholders: ['اكتب متابعة...', 'أضف توجيها...', 'اسأل سؤالا آخر...'],
     startVoice: 'بدء الصوت',
+    openDirective: 'فتح',
     wakeWordListening: (phrase, secondaryPhrase) =>
       `جارٍ الاستماع لعبارة «${phrase}»${secondaryPhrase ? ` أو «${secondaryPhrase}»` : ''}`,
     wakeWordOff: (phrase, secondaryPhrase) => `تشغيل «${phrase}»${secondaryPhrase ? ` أو «${secondaryPhrase}»` : ''}`,
@@ -2242,6 +2244,7 @@ export const ar = defineLocale({
     closeRunningBody:
       'هذه المحادثة ما زالت تعمل (أو تنتظر إدخالك). إغلاق التبويب يخفيها فقط — ستحتفظ الجلسة بتقدمها ويمكن إعادة فتحها من الشريط الجانبي.',
     closeRunningConfirm: 'إغلاق التبويب',
+    reload: 'إعادة التحميل',
     closeOthers: 'إغلاق الأخرى',
     closeToRight: 'إغلاق ما على اليمين',
     closeAll: 'إغلاق الكل',

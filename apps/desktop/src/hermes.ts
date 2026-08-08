@@ -4,6 +4,7 @@ import {
   benaiahManagedModelInfo,
   benaiahManagedModelOptions
 } from '@/lib/benaiah-managed-inference'
+import { reconnectBackoffDelayMs } from '@/lib/reconnect-backoff'
 import type {
   ActionResponse,
   ActionStatusResponse,
@@ -353,8 +354,12 @@ export function pluginSocket(pluginId: string, path: string, onMessage: (data: u
       socket = null
 
       if (!disposed) {
+        // Full-jitter exponential backoff: same rationale as the gateway
+        // socket reconnect loops — an immediate-retry loop across many
+        // desktop clients floods the gateway with connection attempts
+        // during a restart.
+        window.setTimeout(() => void connect(), reconnectBackoffDelayMs(attempt, { baseDelayMs: 500, capMs: 30_000 }))
         attempt += 1
-        window.setTimeout(() => void connect(), Math.min(30_000, 1_000 * 2 ** attempt))
       }
     }
   }

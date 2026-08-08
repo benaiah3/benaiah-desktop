@@ -1,5 +1,6 @@
 import { type MutableRefObject, useCallback, useRef, useState } from 'react'
 
+import { setTerminalFontFamilyFromConfig } from '@/app/right-sidebar/terminal/terminal-font'
 import {
   getApiRequestProfile,
   getHermesConfig,
@@ -130,6 +131,7 @@ export function useHermesConfig({ activeSessionIdRef }: HermesConfigOptions) {
 
         setVoiceMaxRecordingSeconds(recordingLimit(config.voice?.max_recording_seconds))
         setSttEnabled(config.stt?.enabled !== false)
+        setTerminalFontFamilyFromConfig(config.terminal?.font_family)
         applyAutoSpeakFromConfig(config)
         applyVoiceStopPhraseFromConfig(config)
         applyThinkingSoundFromConfig(config)
