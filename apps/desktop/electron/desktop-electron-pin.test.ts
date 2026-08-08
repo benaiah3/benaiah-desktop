@@ -4,7 +4,7 @@
  * The Windows desktop install failed at "Building desktop app" because Electron
  * changed its install mechanism mid patch-series:
  *
- *     electron 40.9.3 .. 40.10.6  -> @electron/get@^2 + extract-zip@^2  (pure JS)
+ *     electron 40.9.3 .. 41.10.3  -> @electron/get@^2 + extract-zip@^2  (pure JS)
  *     electron 40.10.3 / 40.10.4  -> @electron/get@^5 +
  *                                    @electron-internal/extract-zip@^1 (native napi)
  *
