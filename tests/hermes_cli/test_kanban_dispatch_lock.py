@@ -38,8 +38,6 @@ def conn(kanban_home):
         yield c
 
 
-
-
 def test_held_lock_skips_the_tick_without_writes(conn):
     """While another holder owns the board lock, dispatch_once must skip and
     must NOT invoke spawn_fn (no DB writes happen on a skipped tick)."""
@@ -62,8 +60,6 @@ def test_held_lock_skips_the_tick_without_writes(conn):
     assert spawn_calls == [], "spawn_fn must not run while the tick is locked out"
 
 
-
-
 def test_lock_is_board_scoped(conn):
     """Holding board A's dispatch lock must not block a tick on board B —
     distinct boards have distinct DB files and tick independently."""
@@ -77,3 +73,20 @@ def test_lock_is_board_scoped(conn):
             assert held_b is True, "a lock on a different board must be independent"
 
 
+def test_task_ids_narrow_dispatch_without_claiming_unrelated_work(conn, monkeypatch):
+    """A product-specific wake-up may only launch the work it owns."""
+    monkeypatch.setattr("hermes_cli.profiles.profile_exists", lambda _name: True)
+    mission_task = kb.create_task(conn, title="mission", assignee="default")
+    unrelated_task = kb.create_task(conn, title="unrelated", assignee="default")
+    spawned: list[str] = []
+
+    result = kb.dispatch_once(
+        conn,
+        spawn_fn=lambda task, _workspace: spawned.append(task.id) or 12345,
+        task_ids=[mission_task],
+    )
+
+    assert spawned == [mission_task]
+    assert [item[0] for item in result.spawned] == [mission_task]
+    assert kb.get_task(conn, mission_task).status == "running"
+    assert kb.get_task(conn, unrelated_task).status == "ready"

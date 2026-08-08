@@ -8067,6 +8067,7 @@ def dispatch_once(
     board: Optional[str] = None,
     default_assignee: Optional[str] = None,
     max_in_progress_per_profile: Optional[int] = None,
+    task_ids: Optional[Iterable[str]] = None,
 ) -> DispatchResult:
     """Run one dispatcher tick under the board's single-writer lock.
 
@@ -8101,6 +8102,7 @@ def dispatch_once(
             board=board,
             default_assignee=default_assignee,
             max_in_progress_per_profile=max_in_progress_per_profile,
+            task_ids=task_ids,
         )
     with _dispatch_tick_lock(db_path) as held:
         if not held:
@@ -8117,6 +8119,7 @@ def dispatch_once(
             board=board,
             default_assignee=default_assignee,
             max_in_progress_per_profile=max_in_progress_per_profile,
+            task_ids=task_ids,
         )
         # Still under the dispatch lock: opportunistically truncate the WAL
         # at a coarse interval so it cannot grow unbounded between restarts.
@@ -8137,6 +8140,7 @@ def _dispatch_once_locked(
     board: Optional[str] = None,
     default_assignee: Optional[str] = None,
     max_in_progress_per_profile: Optional[int] = None,
+    task_ids: Optional[Iterable[str]] = None,
 ) -> DispatchResult:
     """Run one dispatcher tick.
 
@@ -8165,6 +8169,11 @@ def _dispatch_once_locked(
     ``spawn_fn`` defaults to ``_default_spawn``. Tests pass a stub.
     ``board`` pins workspace/log/db resolution for this tick to a specific
     board. When omitted, the current-board resolution chain is used.
+    ``task_ids`` optionally narrows worker spawning to an explicit set of
+    tasks. Board-level reclaim, timeout and ready-promotion housekeeping still
+    runs normally, but no unrelated ready/review task is claimed. This lets a
+    product surface wake its own work without becoming a second broad queue
+    dispatcher.
     """
     # Reap zombie children from previously spawned workers. See
     # reap_worker_zombies() for the full rationale.
@@ -8210,11 +8219,28 @@ def _dispatch_once_locked(
             ).fetchone()[0]
         )
 
-    ready_rows = conn.execute(
-        "SELECT id, assignee FROM tasks "
-        "WHERE status = 'ready' AND claim_lock IS NULL "
-        "ORDER BY priority DESC, created_at ASC"
-    ).fetchall()
+    selected_task_ids = (
+        tuple(dict.fromkeys(str(task_id) for task_id in task_ids if task_id))
+        if task_ids is not None
+        else None
+    )
+    if selected_task_ids == ():
+        ready_rows = []
+    else:
+        ready_query = (
+            "SELECT id, assignee FROM tasks "
+            "WHERE status = 'ready' AND claim_lock IS NULL"
+        )
+        ready_params: tuple[str, ...] = ()
+        if selected_task_ids is not None:
+            ready_query += (
+                " AND id IN ("
+                + ",".join("?" * len(selected_task_ids))
+                + ")"
+            )
+            ready_params = selected_task_ids
+        ready_query += " ORDER BY priority DESC, created_at ASC"
+        ready_rows = conn.execute(ready_query, ready_params).fetchall()
     # Honour kanban.max_in_progress: if the board already has enough running
     # tasks, skip spawning this tick so slow workers (local LLMs,
     # resource-constrained hosts) can finish what they have before more tasks
@@ -8452,11 +8478,23 @@ def _dispatch_once_locked(
     # Same concurrency model as ready dispatch: review spawns count
     # against max_spawn alongside ready tasks, so the total number of
     # running workers stays bounded.
-    review_rows = conn.execute(
-        "SELECT id, assignee FROM tasks "
-        "WHERE status = 'review' AND claim_lock IS NULL "
-        "ORDER BY priority DESC, created_at ASC"
-    ).fetchall()
+    if selected_task_ids == ():
+        review_rows = []
+    else:
+        review_query = (
+            "SELECT id, assignee FROM tasks "
+            "WHERE status = 'review' AND claim_lock IS NULL"
+        )
+        review_params: tuple[str, ...] = ()
+        if selected_task_ids is not None:
+            review_query += (
+                " AND id IN ("
+                + ",".join("?" * len(selected_task_ids))
+                + ")"
+            )
+            review_params = selected_task_ids
+        review_query += " ORDER BY priority DESC, created_at ASC"
+        review_rows = conn.execute(review_query, review_params).fetchall()
     for row in review_rows:
         if max_spawn is not None and running_count + spawned >= max_spawn:
             break

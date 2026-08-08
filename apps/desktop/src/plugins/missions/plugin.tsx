@@ -119,6 +119,14 @@ function runtimeLabel(value: string | null): string {
   return value === 'codex' ? 'Codex' : value === 'hermes' ? 'Hermes' : value
 }
 
+export function resolveMissionWorkspace(rawWorkspace: string) {
+  const workspace = rawWorkspace.trim()
+
+  return workspace
+    ? { workspace_kind: 'dir' as const, workspace_path: workspace }
+    : { workspace_kind: 'scratch' as const, workspace_path: null }
+}
+
 function MissionProgress({ mission }: { mission: Mission }) {
   const order = ['queued', 'running', 'verifying', 'succeeded']
 
@@ -290,8 +298,8 @@ function CreateMission({ onCreated }: { onCreated: () => Promise<void> }) {
   }, [cwd, workspace])
 
   async function submit() {
-    if (!objective.trim() || !success.trim() || !workspace.trim()) {
-      setError('Add the outcome, proof of success, and a workspace.')
+    if (!objective.trim() || !success.trim()) {
+      setError('Add the outcome and the evidence that proves it is finished.')
 
       return
     }
@@ -308,11 +316,12 @@ function CreateMission({ onCreated }: { onCreated: () => Promise<void> }) {
     setError('')
 
     try {
+      const resolvedWorkspace = resolveMissionWorkspace(workspace)
+
       await host.request('missions.create', {
         objective: objective.trim(),
         success_criteria: success.trim(),
-        workspace_path: workspace.trim(),
-        workspace_kind: 'dir',
+        ...resolvedWorkspace,
         worker_runtime: worker,
         verifier_runtime: 'auto',
         intelligence_tier: tier,
@@ -374,12 +383,17 @@ function CreateMission({ onCreated }: { onCreated: () => Promise<void> }) {
           />
         </label>
         <label className="sm:col-span-2">
-          <span className="mb-1 block text-[0.6875rem] font-medium text-(--ui-text-secondary)">Workspace</span>
+          <span className="mb-1 block text-[0.6875rem] font-medium text-(--ui-text-secondary)">
+            Workspace <span className="font-normal text-muted-foreground">· optional</span>
+          </span>
           <Input
             onChange={event => setWorkspace(event.target.value)}
-            placeholder="/path/to/workspace"
+            placeholder="Leave blank for a private Benaiah-managed workspace"
             value={workspace}
           />
+          <p className="mt-1.5 text-[0.6875rem] leading-4 text-muted-foreground">
+            Choose a folder for repository work. Otherwise Benaiah creates an isolated workspace automatically.
+          </p>
         </label>
         <label>
           <span className="mb-1 block text-[0.6875rem] font-medium text-(--ui-text-secondary)">Worker</span>

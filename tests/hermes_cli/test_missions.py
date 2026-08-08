@@ -143,3 +143,20 @@ def test_create_rejects_a_permission_boundary_the_worker_cannot_enforce(
             raise AssertionError(
                 "Mission accepted an unenforceable permission boundary"
             )
+
+
+def test_blank_workspace_creates_a_managed_scratch_task(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "home"))
+    with kb.connect_closing() as conn:
+        mission = missions.create_mission(
+            conn,
+            objective="Prepare a private draft",
+            success_criteria="The draft is independently verified",
+            workspace_kind="scratch",
+            workspace_path=None,
+        )
+        task = kb.get_task(conn, mission.task_id)
+
+        assert task is not None
+        assert task.workspace_kind == "scratch"
+        assert task.workspace_path is None

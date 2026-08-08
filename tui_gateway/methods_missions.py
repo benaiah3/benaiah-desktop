@@ -1,11 +1,18 @@
 """JSON-RPC controls for the local Benaiah Mission Control Plane."""
 
+import logging
+import threading
 from typing import TYPE_CHECKING, Any
 
 from .method_ctx import HandlerRegistry
 
 _registry = HandlerRegistry()
 method = _registry.method
+
+logger = logging.getLogger(__name__)
+_dispatch_lock = threading.Lock()
+_dispatch_pending: dict[str, set[str]] = {}
+_dispatch_threads: dict[str, threading.Thread] = {}
 
 if TYPE_CHECKING:
     # HandlerRegistry installs these functions into server.py's globals.  The
@@ -14,6 +21,55 @@ if TYPE_CHECKING:
     def _err(rid: Any, code: int, message: str) -> dict: ...
     def _mission_rpc_view(conn: Any, mission: Any, *, detail: bool = False) -> dict: ...
     def _mission_rpc_control(rid: Any, params: dict, action: str) -> dict: ...
+    def _mission_dispatch_kick(board: Any, task_ids: Any) -> None: ...
+
+
+def _dispatch_board(key: str, board: str | None) -> None:
+    """Drain Mission-specific dispatch requests for one board."""
+    from hermes_cli import kanban_db as kb
+
+    while True:
+        with _dispatch_lock:
+            task_ids = tuple(_dispatch_pending.get(key, ()))
+            if not task_ids:
+                _dispatch_pending.pop(key, None)
+                _dispatch_threads.pop(key, None)
+                return
+            _dispatch_pending[key].clear()
+        try:
+            with kb.connect_closing(board=board) as conn:
+                kb.dispatch_once(conn, board=board, task_ids=task_ids)
+        except Exception:
+            # Dispatch is durable: the task remains queued and the next
+            # Missions refresh will wake it again. Keep the RPC responsive and
+            # leave a diagnostic instead of killing this coordinator thread.
+            logger.exception("Mission dispatcher wake-up failed for board %r", board)
+
+
+def _kick_dispatch(board: Any, task_ids: Any) -> None:
+    """Wake the existing dispatcher for only the supplied Mission tasks."""
+    normalized_board = str(board or "").strip() or None
+    normalized_ids = {str(task_id) for task_id in task_ids if task_id}
+    if not normalized_ids:
+        return
+    key = normalized_board or "default"
+    with _dispatch_lock:
+        _dispatch_pending.setdefault(key, set()).update(normalized_ids)
+        current = _dispatch_threads.get(key)
+        if current is not None and current.is_alive():
+            return
+        worker = threading.Thread(
+            target=_dispatch_board,
+            args=(key, normalized_board),
+            name=f"benaiah-missions-{key}",
+            daemon=True,
+        )
+        _dispatch_threads[key] = worker
+        try:
+            worker.start()
+        except RuntimeError:
+            _dispatch_threads.pop(key, None)
+            logger.exception("Mission dispatcher coordinator could not start")
 
 
 def _view(conn, mission, *, detail=False):
@@ -43,9 +99,16 @@ def _(rid, params: dict) -> dict:
                 include_terminal=bool(params.get("include_terminal", True)),
                 limit=int(params.get("limit") or 100),
             )
-            return _ok(
+            response = _ok(
                 rid, {"missions": [_mission_rpc_view(conn, value) for value in values]}
             )
+            active_task_ids = [
+                value.task_id
+                for value in values
+                if value.status in {"queued", "running", "verifying"}
+            ]
+        _mission_dispatch_kick(params.get("board"), active_task_ids)
+        return response
     except Exception as exc:
         return _err(rid, 5080, str(exc))
 
@@ -112,7 +175,10 @@ def _(rid, params: dict) -> dict:
                 approve_now=bool(params.get("approve_now", False)),
                 board=params.get("board"),
             )
-            return _ok(rid, {"mission": _mission_rpc_view(conn, mission)})
+            response = _ok(rid, {"mission": _mission_rpc_view(conn, mission)})
+        if mission.status == "queued":
+            _mission_dispatch_kick(params.get("board"), [mission.task_id])
+        return response
     except (ValueError, KeyError) as exc:
         return _err(rid, 4082, str(exc))
     except Exception as exc:
@@ -134,9 +200,11 @@ def _control(rid, params: dict, action: str) -> dict:
             "approve": missions.approve_mission,
         }[action]
         with kb.connect_closing(board=params.get("board")) as conn:
-            return _ok(
-                rid, {"mission": _mission_rpc_view(conn, function(conn, mission_id))}
-            )
+            mission = function(conn, mission_id)
+            response = _ok(rid, {"mission": _mission_rpc_view(conn, mission)})
+        if action in {"resume", "approve"} and mission.status == "queued":
+            _mission_dispatch_kick(params.get("board"), [mission.task_id])
+        return response
     except (ValueError, KeyError, RuntimeError) as exc:
         return _err(rid, 4083, str(exc))
     except Exception as exc:
@@ -184,6 +252,7 @@ def register(server) -> None:
     import types
 
     server._mission_rpc_view = _view
+    server._mission_dispatch_kick = _kick_dispatch
     server._mission_rpc_control = types.FunctionType(
         _control.__code__,
         vars(server),

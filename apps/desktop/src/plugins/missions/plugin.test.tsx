@@ -1,8 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import plugin from './plugin'
+import plugin, { resolveMissionWorkspace } from './plugin'
 
 describe('Benaiah Missions plugin', () => {
+  it('uses a managed scratch workspace when the operator leaves the field blank', () => {
+    expect(resolveMissionWorkspace('   ')).toEqual({
+      workspace_kind: 'scratch',
+      workspace_path: null
+    })
+    expect(resolveMissionWorkspace(' /tmp/project ')).toEqual({
+      workspace_kind: 'dir',
+      workspace_path: '/tmp/project'
+    })
+  })
+
   it('registers one operator page and one matching sidebar route', () => {
     const registerMany = vi.fn()
 
