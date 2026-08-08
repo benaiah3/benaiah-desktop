@@ -7064,7 +7064,7 @@ class AIAgent:
             reset_conversation_context,
             set_conversation_context,
         )
-        from hermes_cli.observability.relay_shared_metrics import (
+        from hermes_cli.observability import (
             finish_task_run,
             start_task_run,
         )

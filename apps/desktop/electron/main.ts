@@ -6891,6 +6891,7 @@ function decryptDesktopSecret(secret) {
 // ---------------------------------------------------------------------------
 
 const BENAIAH_ACCOUNT_GATEWAY = process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah.ai/api/cli/v1'
+const BENAIAH_ACCOUNT_INFERENCE_GATEWAY = `${BENAIAH_ACCOUNT_GATEWAY.replace(/\/$/, '')}/desktop`
 
 const BENAIAH_REMOTE_API = process.env.BENAIAH_REMOTE_API || 'https://benaiah.ai/api'
 
@@ -7247,7 +7248,7 @@ async function benaiahAccountLinkStatus(profile?: string) {
         scope: 'main',
         provider: 'custom',
         model: readCurrentBenaiahManagedModel() || 'benaiah-auto',
-        base_url: BENAIAH_ACCOUNT_GATEWAY,
+        base_url: BENAIAH_ACCOUNT_INFERENCE_GATEWAY,
         api_key: account.token,
         api_mode: 'codex_responses'
       } as any)
@@ -7274,7 +7275,7 @@ async function benaiahAccountLinkStatus(profile?: string) {
     scope: 'main',
     provider: 'custom',
     model: 'benaiah-auto',
-    base_url: BENAIAH_ACCOUNT_GATEWAY,
+    base_url: BENAIAH_ACCOUNT_INFERENCE_GATEWAY,
     api_key: pending.token,
     api_mode: 'codex_responses'
   } as any)
