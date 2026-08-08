@@ -28,6 +28,7 @@ function renderSubmenu(opts: {
   effort?: string
   fastControl: FastControl
   isActive?: boolean
+  model?: string
   onSelectModel?: (model: string) => void
   onSetOptions: (patch: { effort?: string; fast?: boolean }) => void
   reasoning: boolean
@@ -42,7 +43,7 @@ function renderSubmenu(opts: {
             effort={opts.effort ?? 'medium'}
             fastControl={opts.fastControl}
             isActive={opts.isActive ?? true}
-            model="m1"
+            model={opts.model ?? 'm1'}
             onSelectModel={opts.onSelectModel ?? vi.fn()}
             onSetOptions={opts.onSetOptions}
             provider="p1"
@@ -127,5 +128,43 @@ describe('ModelEditSubmenu reports edits without performing them', () => {
     fireEvent.click(screen.getByRole('switch'))
 
     expect(onSelectModel).toHaveBeenCalledWith('m1-fast')
+  })
+
+  it('shows only the five public Benaiah Auto tiers in the product order', () => {
+    renderSubmenu({
+      effort: 'high',
+      fastControl: { kind: 'none' },
+      model: 'benaiah-auto',
+      onSetOptions: vi.fn(),
+      reasoning: true
+    })
+
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual([
+      'Pro',
+      'Extra High',
+      'High',
+      'Medium',
+      'Instant'
+    ])
+    expect(screen.queryByText('Minimal')).toBeNull()
+    expect(screen.queryByText('Low')).toBeNull()
+    expect(screen.queryByText('Max')).toBeNull()
+    expect(screen.queryByText('Ultra')).toBeNull()
+    expect(screen.queryByText('Thinking')).toBeNull()
+  })
+
+  it('reports the selected public Auto tier through its opaque Hermes effort code', () => {
+    const onSetOptions = vi.fn()
+    renderSubmenu({
+      effort: 'high',
+      fastControl: { kind: 'none' },
+      model: 'benaiah-auto',
+      onSetOptions,
+      reasoning: true
+    })
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Extra High' }))
+
+    expect(onSetOptions).toHaveBeenCalledWith({ effort: 'xhigh' })
   })
 })

@@ -20,6 +20,11 @@ import { usePointerQuiet } from '@/components/ui/keyboard-first'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
+import {
+  benaiahAutoLevelLabel,
+  defaultEffortForModel,
+  isBenaiahAutoModel
+} from '@/lib/benaiah-managed-inference'
 import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { displayModelName, modelDisplayParts } from '@/lib/model-status-label'
 import { DEFAULT_REASONING_EFFORT, reasoningEffortLabel } from '@/lib/reasoning-effort'
@@ -199,7 +204,9 @@ export function ModelCatalogMenu({
 
     controller.applyPreset(
       {
-        effort: (caps?.reasoning ?? true) ? (preset.effort ?? defaultEffort) : undefined,
+        effort: (caps?.reasoning ?? true)
+          ? (preset.effort ?? defaultEffortForModel(family.id, defaultEffort))
+          : undefined,
         fast: (caps?.fast ?? false) ? (preset.fast ?? false) : undefined
       },
       { model: family.id, provider: provider.slug }
@@ -409,7 +416,11 @@ export function ModelCatalogMenu({
 
                     const meta = [
                       fastControl.kind !== 'none' && fastControl.on ? copy.fast : null,
-                      (caps?.reasoning ?? true) ? reasoningEffortLabel(effEffort || defaultEffort) : null
+                      (caps?.reasoning ?? true)
+                        ? isBenaiahAutoModel(family.id)
+                          ? benaiahAutoLevelLabel(effEffort || defaultEffort)
+                          : reasoningEffortLabel(effEffort || defaultEffort)
+                        : null
                     ]
                       .filter(Boolean)
                       .join(' ')

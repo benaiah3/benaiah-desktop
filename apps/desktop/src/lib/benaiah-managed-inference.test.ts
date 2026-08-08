@@ -3,11 +3,23 @@ import { describe, expect, it } from 'vitest'
 import {
   BENAIAH_MANAGED_MODEL,
   BENAIAH_MANAGED_PROVIDER,
+  benaiahAutoLevelLabel,
   benaiahManagedModelInfo,
-  benaiahManagedModelOptions
+  benaiahManagedModelOptions,
+  defaultEffortForModel,
+  resolveBenaiahAutoEffort
 } from './benaiah-managed-inference'
 
 describe('Benaiah managed inference policy', () => {
+  it('keeps the public Auto ladder separate from Hermes reasoning terminology', () => {
+    expect(resolveBenaiahAutoEffort('max')).toBe('xhigh')
+    expect(resolveBenaiahAutoEffort('low')).toBe('minimal')
+    expect(benaiahAutoLevelLabel('max')).toBe('Extra High')
+    expect(benaiahAutoLevelLabel('none')).toBe('Instant')
+    expect(defaultEffortForModel(BENAIAH_MANAGED_MODEL, '')).toBe('high')
+    expect(defaultEffortForModel('openai/gpt-5.6-sol', 'medium')).toBe('medium')
+  })
+
   it('hides direct providers and preserves the live Benaiah catalogue', () => {
     const result = benaiahManagedModelOptions({
       model: 'gpt-5.6-sol',

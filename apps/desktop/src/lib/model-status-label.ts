@@ -1,3 +1,4 @@
+import { benaiahAutoLevelLabel, isBenaiahAutoModel } from '@/lib/benaiah-managed-inference'
 import { DEFAULT_REASONING_EFFORT, reasoningEffortLabel } from '@/lib/reasoning-effort'
 
 /** Which model/provider pair a picker should mark "current". SessionView state
@@ -109,6 +110,10 @@ export function formatModelStatusLabel(
   }
 
   const parts: string[] = []
+
+  if (isBenaiahAutoModel(model)) {
+    return `${name} · ${benaiahAutoLevelLabel(options?.reasoningEffort || options?.defaultEffort || '')}`
+  }
 
   // Fast is shown when the speed=fast param is on (options.fastMode) OR the
   // active model is a `…-fast` variant (fast via a separate model id).

@@ -45,6 +45,7 @@ const mockConfig = (config: Record<string, unknown>) =>
 describe('useHermesConfig refreshHermesConfig', () => {
   beforeEach(() => {
     // Reset atoms and localStorage between tests
+    window.localStorage.clear()
     setCurrentCwd('')
     setCurrentFastMode(false)
     setCurrentModelSource('')
@@ -54,6 +55,57 @@ describe('useHermesConfig refreshHermesConfig', () => {
     persistString(WORKSPACE_CWD_KEY, null)
     vi.mocked(getApiRequestProfile).mockReturnValue(null)
     vi.mocked(saveHermesConfig).mockClear()
+  })
+
+  it('migrates the former Hermes medium default to Benaiah Auto High once', async () => {
+    mockConfig({ agent: { reasoning_effort: 'medium' } })
+    const { result } = renderHook(() => useHermesConfig({ activeSessionIdRef: { current: null } }))
+
+    await act(async () => {
+      await result.current.refreshHermesConfig()
+    })
+
+    expect($defaultReasoningEffort.get()).toBe('high')
+    expect($currentReasoningEffort.get()).toBe('high')
+    expect(saveHermesConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: { reasoning_effort: 'high' } }),
+      undefined
+    )
+  })
+
+  it('makes High explicit when the legacy profile inherited Hermes medium implicitly', async () => {
+    mockConfig({})
+    const { result } = renderHook(() => useHermesConfig({ activeSessionIdRef: { current: null } }))
+
+    await act(async () => {
+      await result.current.refreshHermesConfig()
+    })
+
+    expect($defaultReasoningEffort.get()).toBe('high')
+    expect(saveHermesConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: { reasoning_effort: 'high' } }),
+      undefined
+    )
+  })
+
+  it('migrates an already-open legacy Auto session to High as well', async () => {
+    const requestGateway = vi.fn().mockResolvedValue({})
+    setCurrentReasoningEffort('medium')
+    mockConfig({ agent: { reasoning_effort: 'medium' } })
+    const { result } = renderHook(() =>
+      useHermesConfig({ activeSessionIdRef: { current: 'session-legacy' }, requestGateway })
+    )
+
+    await act(async () => {
+      await result.current.refreshHermesConfig()
+    })
+
+    expect($currentReasoningEffort.get()).toBe('high')
+    expect(requestGateway).toHaveBeenCalledWith('config.set', {
+      key: 'reasoning',
+      session_id: 'session-legacy',
+      value: 'high'
+    })
   })
 
   // Regression: the composer keeps a manual model pick sticky, which skips the

@@ -42,6 +42,20 @@ describe('model-status-label', () => {
     )
   })
 
+  it('uses the five stable Benaiah Auto labels and defaults Auto to High', () => {
+    expect(formatModelStatusLabel('benaiah-auto')).toBe('Benaiah Auto · High')
+    expect(formatModelStatusLabel('benaiah-auto', { reasoningEffort: 'minimal' })).toBe(
+      'Benaiah Auto · Instant'
+    )
+    expect(formatModelStatusLabel('benaiah-auto', { reasoningEffort: 'medium' })).toBe(
+      'Benaiah Auto · Medium'
+    )
+    expect(formatModelStatusLabel('benaiah-auto', { reasoningEffort: 'xhigh' })).toBe(
+      'Benaiah Auto · Extra High'
+    )
+    expect(formatModelStatusLabel('benaiah-auto', { reasoningEffort: 'ultra' })).toBe('Benaiah Auto · Pro')
+  })
+
   it('returns just the placeholder name when there is no model', () => {
     expect(formatModelStatusLabel('')).toBe('No model')
   })

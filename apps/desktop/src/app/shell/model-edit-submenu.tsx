@@ -10,6 +10,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
+import {
+  BENAIAH_AUTO_LEVELS,
+  isBenaiahAutoModel,
+  resolveBenaiahAutoEffort
+} from '@/lib/benaiah-managed-inference'
 import { isThinkingEnabled, REASONING_EFFORTS, resolveReasoningEffort } from '@/lib/reasoning-effort'
 
 // Hermes' real reasoning levels live in lib/reasoning-effort; `none` is owned
@@ -102,12 +107,36 @@ function ModelEditSubmenuBody({
   effort,
   fastControl,
   isActive,
+  model,
   onSelectModel,
   onSetOptions,
   reasoning
 }: ModelEditSubmenuProps) {
   const { t } = useI18n()
   const copy = t.shell.modelOptions
+  const isBenaiahAuto = isBenaiahAutoModel(model)
+
+  if (isBenaiahAuto) {
+    const autoEffort = resolveBenaiahAutoEffort(effort, defaultEffort)
+
+    return (
+      <>
+        <DropdownMenuLabel className={dropdownMenuSectionLabel}>Benaiah Auto</DropdownMenuLabel>
+        <DropdownMenuRadioGroup onValueChange={value => onSetOptions({ effort: value })} value={autoEffort}>
+          {BENAIAH_AUTO_LEVELS.map(level => (
+            <DropdownMenuRadioItem
+              className={dropdownMenuRow}
+              key={level.effort}
+              onSelect={event => event.preventDefault()}
+              value={level.effort}
+            >
+              {level.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </>
+    )
+  }
 
   const effortValue = resolveReasoningEffort(effort, defaultEffort)
   const thinkingOn = isThinkingEnabled(effort, defaultEffort)

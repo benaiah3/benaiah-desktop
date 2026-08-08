@@ -7,6 +7,10 @@ import {
   getHermesConfigDefaults,
   saveHermesConfig
 } from '@/hermes'
+import {
+  markBenaiahAutoDefaultMigrated,
+  withBenaiahAutoDefault
+} from '@/lib/benaiah-managed-inference'
 import { withBenaiahVoiceDefaults } from '@/lib/benaiah-voice-defaults'
 import { BUILTIN_PERSONALITIES, normalizePersonalityValue, personalityNamesFromConfig } from '@/lib/chat-runtime'
 import { normalize } from '@/lib/text'
@@ -53,9 +57,10 @@ function normalizeConfigEffort(value: unknown): string {
 
 interface HermesConfigOptions {
   activeSessionIdRef: MutableRefObject<string | null>
+  requestGateway?: <T>(method: string, params?: Record<string, unknown>) => Promise<T>
 }
 
-export function useHermesConfig({ activeSessionIdRef }: HermesConfigOptions) {
+export function useHermesConfig({ activeSessionIdRef, requestGateway }: HermesConfigOptions) {
   const [voiceMaxRecordingSeconds, setVoiceMaxRecordingSeconds] = useState(DEFAULT_VOICE_SECONDS)
   const [sttEnabled, setSttEnabled] = useState(true)
   const profileRefreshEpochRef = useRef(0)
@@ -80,16 +85,24 @@ export function useHermesConfig({ activeSessionIdRef }: HermesConfigOptions) {
           return
         }
 
-        const voiceDefaults = withBenaiahVoiceDefaults(loadedConfig)
+        const profile = requestProfile ?? 'default'
+        const autoDefaults = withBenaiahAutoDefault(loadedConfig, profile)
+        const voiceDefaults = withBenaiahVoiceDefaults(autoDefaults.config)
         const config = voiceDefaults.config
 
-        if (voiceDefaults.changed) {
+        if (voiceDefaults.changed || autoDefaults.changed) {
           // Profile-scoped and best-effort: an older backend may reject the
           // write, but chat must still load and will inherit its runtime
           // default until it updates.
-          void saveHermesConfig(config as unknown as Record<string, unknown>, requestProfile ?? undefined).catch(
-            () => undefined
-          )
+          void saveHermesConfig(config as unknown as Record<string, unknown>, requestProfile ?? undefined)
+            .then(() => {
+              if (autoDefaults.migrationPending) {
+                markBenaiahAutoDefaultMigrated(profile)
+              }
+            })
+            .catch(() => undefined)
+        } else if (autoDefaults.migrationPending) {
+          markBenaiahAutoDefaultMigrated(profile)
         }
 
         const personality = normalizePersonalityValue(
@@ -110,6 +123,19 @@ export function useHermesConfig({ activeSessionIdRef }: HermesConfigOptions) {
 
         const reasoning = normalizeConfigEffort(config.agent?.reasoning_effort)
         const tier = (config.agent?.service_tier ?? '').trim()
+
+        // An already-open pre-ladder conversation can still carry Hermes'
+        // former medium default even after config.yaml has migrated. Bring the
+        // live session into lockstep once as well, so picker row, composer pill
+        // and the actual next request all resolve to Benaiah High together.
+        if (autoDefaults.migrationPending && reasoning === 'high' && activeSessionIdRef.current) {
+          setCurrentReasoningEffort('high')
+          void requestGateway?.('config.set', {
+            key: 'reasoning',
+            session_id: activeSessionIdRef.current,
+            value: 'high'
+          }).catch(() => undefined)
+        }
 
         // Publish the profile default regardless of whether the composer is
         // reseeded below: picker rows and preset application resolve "the

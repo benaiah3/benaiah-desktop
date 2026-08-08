@@ -1,12 +1,13 @@
 import { useStore } from '@nanostores/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { Codicon } from '@/components/ui/codicon'
 import { DropdownMenuItem, dropdownMenuRow } from '@/components/ui/dropdown-menu'
 import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { BENAIAH_AUTO_DEFAULT_EFFORT, isBenaiahAutoModel } from '@/lib/benaiah-managed-inference'
 import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { currentPickerSelection } from '@/lib/model-status-label'
 import { DEFAULT_REASONING_EFFORT } from '@/lib/reasoning-effort'
@@ -80,6 +81,47 @@ export function ModelMenuPanel({ gateway, onSelectModel, profile = 'default', re
     { model: currentModel, provider: currentProvider },
     modelOptions.data
   )
+
+  // Upgrade an already-open pre-ladder Auto session from Hermes medium to
+  // Benaiah High. A user choosing Medium in the new five-tier UI stamps the
+  // preset as an explicit Auto-tier choice first, so it is preserved and never
+  // enters this migration path.
+  useEffect(() => {
+    const autoPreset = modelPresets[modelPresetKey(optionsProvider, optionsModel)]
+
+    if (
+      !isBenaiahAutoModel(optionsModel) ||
+      currentReasoningEffort !== 'medium' ||
+      autoPreset?.autoTier === true
+    ) {
+      return
+    }
+
+    if (touchesPrimary) {
+      setCurrentReasoningEffort(BENAIAH_AUTO_DEFAULT_EFFORT)
+    } else if (activeSessionId) {
+      sessionTileDelegate()?.updateSession(activeSessionId, state => ({
+        ...state,
+        reasoningEffort: BENAIAH_AUTO_DEFAULT_EFFORT
+      }))
+    }
+
+    if (activeSessionId) {
+      void requestGateway('config.set', {
+        key: 'reasoning',
+        session_id: activeSessionId,
+        value: BENAIAH_AUTO_DEFAULT_EFFORT
+      }).catch(() => undefined)
+    }
+  }, [
+    activeSessionId,
+    currentReasoningEffort,
+    modelPresets,
+    optionsModel,
+    optionsProvider,
+    requestGateway,
+    touchesPrimary
+  ])
 
   // Explicit "Refresh Models": re-fetch the catalog with refresh:true so the
   // backend busts its 1h provider-model disk cache and re-pulls each provider's
@@ -202,7 +244,11 @@ export function ModelMenuPanel({ gateway, onSelectModel, profile = 'default', re
       // everywhere); the active model also gets it pushed onto its OWN session.
       // Non-active edits stay preset-only — no model switch, no session write.
       if (patch.effort !== undefined || patch.fast !== undefined) {
-        setModelPreset(row.provider, row.model, patch)
+        setModelPreset(
+          row.provider,
+          row.model,
+          isBenaiahAutoModel(row.model) && patch.effort !== undefined ? { ...patch, autoTier: true } : patch
+        )
       }
 
       if (!row.isActive) {

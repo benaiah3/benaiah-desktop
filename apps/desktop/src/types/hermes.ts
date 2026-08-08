@@ -337,6 +337,11 @@ export interface HermesConfig {
     repo_scan_roots?: string[]
     repo_scan_exclude_paths?: string[]
   }
+  custom_providers?: Array<{
+    base_url?: string
+    extra_body?: Record<string, unknown>
+    [key: string]: unknown
+  }>
   terminal?: {
     cwd?: string
     font_family?: string
