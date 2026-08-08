@@ -207,6 +207,9 @@ _LONG_HANDLERS = frozenset(
         "billing.step_up",
         "browser.manage",
         "cli.exec",
+        "missions.create",
+        "missions.pause",
+        "missions.cancel",
         # Completion RPCs run inline on the reader thread by default, but both
         # can block it for seconds: complete.path spawns `git ls-files` and
         # fuzzy-ranks the whole repo (slow on large repos / WSL2 mounts), and
@@ -13602,6 +13605,7 @@ def _browser_disconnect(rid) -> dict:
 from . import (  # noqa: E402
     methods_complete as _methods_complete,
     methods_config as _methods_config,
+    methods_missions as _methods_missions,
     methods_prompt as _methods_prompt,
     methods_session as _methods_session,
     methods_tools as _methods_tools,
@@ -13611,6 +13615,7 @@ for _m in (
     _methods_session,
     _methods_prompt,
     _methods_config,
+    _methods_missions,
     _methods_complete,
     _methods_tools,
 ):

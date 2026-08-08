@@ -26,7 +26,12 @@ def _enable(monkeypatch, tmp_path):
 def _payloads(tmp_path):
     path = tmp_path / "telemetry" / "benaiah_outcomes" / "relay.sqlite3"
     with sqlite3.connect(path) as connection:
-        return [json.loads(row[0]) for row in connection.execute("SELECT payload FROM outbox ORDER BY created_at")]
+        return [
+            json.loads(row[0])
+            for row in connection.execute(
+                "SELECT payload FROM outbox ORDER BY created_at"
+            )
+        ]
 
 
 def test_managed_config_enables_account_scoped_relay(monkeypatch, tmp_path):
@@ -47,11 +52,31 @@ def test_task_lifecycle_is_durable_content_free_and_idempotent(monkeypatch, tmp_
         result={"completed": True, "private": "must never be copied"},
     )
     payloads = _payloads(tmp_path)
-    assert len([item for item in payloads if item.get("kind") == "run" and item["input"]["status"] == "started"]) == 1
-    terminal = next(item for item in payloads if item.get("kind") == "run" and item["input"]["status"] == "completed")
+    assert (
+        len([
+            item
+            for item in payloads
+            if item.get("kind") == "run" and item["input"]["status"] == "started"
+        ])
+        == 1
+    )
+    terminal = next(
+        item
+        for item in payloads
+        if item.get("kind") == "run" and item["input"]["status"] == "completed"
+    )
     encoded = json.dumps(terminal)
     assert "must never be copied" not in encoded
-    assert not {"prompt", "response", "content", "command", "args", "path", "url", "error_message"}.intersection(terminal["input"])
+    assert not {
+        "prompt",
+        "response",
+        "content",
+        "command",
+        "args",
+        "path",
+        "url",
+        "error_message",
+    }.intersection(terminal["input"])
 
 
 def test_model_and_tool_hooks_emit_only_bounded_child_events(monkeypatch, tmp_path):
@@ -83,9 +108,14 @@ def test_model_and_tool_hooks_emit_only_bounded_child_events(monkeypatch, tmp_pa
         result="private result",
         duration_ms=12,
     )
-    trace_payloads = [item for item in _payloads(tmp_path) if item.get("kind") == "event"]
+    trace_payloads = [
+        item for item in _payloads(tmp_path) if item.get("kind") == "event"
+    ]
     assert {item["input"]["eventType"] for item in trace_payloads} == {
-        "model_call_started", "model_call_completed", "tool_call_started", "tool_call_completed",
+        "model_call_started",
+        "model_call_completed",
+        "tool_call_started",
+        "tool_call_completed",
     }
     encoded = json.dumps(trace_payloads)
     assert "private prompt" not in encoded
@@ -103,3 +133,27 @@ def test_non_benaiah_provider_never_enables_native_relay(monkeypatch, tmp_path):
     )
     assert relay.enabled() is False
 
+
+def test_mission_lifecycle_preserves_product_classification_without_content(
+    monkeypatch, tmp_path
+):
+    _enable(monkeypatch, tmp_path)
+    relay.start_task_run(
+        session_id="",
+        task_id="m_public-id",
+        platform="mission-control",
+        feature="missions",
+        task_class="mission",
+        auto_tier="extra_high",
+    )
+    relay.finish_task_run(
+        session_id="",
+        task_id="m_public-id",
+        platform="mission-control",
+        result={"completed": True, "objective": "private objective"},
+    )
+    runs = [item for item in _payloads(tmp_path) if item.get("kind") == "run"]
+    assert {item["input"]["feature"] for item in runs} == {"missions"}
+    assert {item["input"]["taskClass"] for item in runs} == {"mission"}
+    assert {item["input"]["autoTier"] for item in runs} == {"extra_high"}
+    assert "private objective" not in json.dumps(runs)

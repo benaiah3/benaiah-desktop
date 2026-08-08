@@ -8810,6 +8810,15 @@ def _default_spawn(
     if not task.assignee:
         raise ValueError(f"task {task.id} has no assignee")
 
+    # Missions reuse Kanban's claim, workspace, heartbeat and recovery kernel,
+    # but their process is a supervisor which can select Codex or Hermes and
+    # independently verify the result.  Keep this hook ahead of the classic
+    # Hermes worker so there is still only one dispatcher and one task lease.
+    from hermes_cli.missions import maybe_spawn_task
+    mission_pid = maybe_spawn_task(task, workspace, board=board)
+    if mission_pid is not None:
+        return mission_pid
+
     from hermes_cli.profiles import normalize_profile_name
 
     profile_arg = normalize_profile_name(task.assignee)

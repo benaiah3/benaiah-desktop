@@ -4783,6 +4783,13 @@ def cmd_kanban(args):
     return kanban_command(args)
 
 
+def cmd_mission(args):
+    """Persistent Benaiah Agent Control Plane."""
+    from hermes_cli.mission_cli import mission_command
+
+    return mission_command(args)
+
+
 def cmd_project(args):
     """Manage projects (named, multi-folder workspaces)."""
     from hermes_cli.projects_cmd import projects_command
@@ -11352,6 +11359,13 @@ def main():
 
     kanban_parser = _build_kanban_parser(subparsers)
     kanban_parser.set_defaults(func=cmd_kanban)
+
+    # =========================================================================
+    # mission command — persistent Agent Control Plane
+    # =========================================================================
+    from hermes_cli.subcommands.mission import build_mission_parser
+
+    build_mission_parser(subparsers, cmd_mission=cmd_mission)
 
     # =========================================================================
     # project command — named, multi-folder workspaces

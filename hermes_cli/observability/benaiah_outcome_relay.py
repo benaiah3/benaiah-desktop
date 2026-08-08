@@ -198,7 +198,11 @@ def _heartbeat() -> None:
     })
 
 
-def start_task_run(*, session_id: str, task_id: str, platform: str, parent_session_id: str = "") -> None:
+def start_task_run(
+    *, session_id: str, task_id: str, platform: str, parent_session_id: str = "",
+    feature: str = "managed_intelligence", task_class: str = "agent_request",
+    auto_tier: str = "high",
+) -> None:
     del session_id, parent_session_id
     if not enabled() or not task_id:
         return
@@ -213,6 +217,9 @@ def start_task_run(*, session_id: str, task_id: str, platform: str, parent_sessi
             "model_calls": set(),
             "retry_count": 0,
             "execution_platform": str(platform or ""),
+            "feature": str(feature or "managed_intelligence"),
+            "task_class": str(task_class or "agent_request"),
+            "auto_tier": str(auto_tier or "high"),
         }
     _heartbeat()
     _enqueue({
@@ -221,10 +228,10 @@ def start_task_run(*, session_id: str, task_id: str, platform: str, parent_sessi
         "sourceId": task_id,
         "input": {
             **_base_input(),
-            "feature": "managed_intelligence",
-            "taskClass": "agent_request",
+            "feature": str(feature or "managed_intelligence"),
+            "taskClass": str(task_class or "agent_request"),
             "routeMode": "auto",
-            "autoTier": "high",
+            "autoTier": str(auto_tier or "high"),
             "status": "started",
             "startedAt": started_at,
             "occurredAt": started_at,
@@ -236,6 +243,8 @@ def start_task_run(*, session_id: str, task_id: str, platform: str, parent_sessi
 def finish_task_run(
     *, session_id: str, task_id: str, platform: str,
     result: dict[str, Any] | None = None, error: BaseException | None = None,
+    feature: str | None = None, task_class: str | None = None,
+    auto_tier: str | None = None,
 ) -> None:
     del session_id, platform
     if not enabled() or not task_id:
@@ -256,10 +265,10 @@ def finish_task_run(
         "sourceId": task_id,
         "input": {
             **_base_input(),
-            "feature": "managed_intelligence",
-            "taskClass": "agent_request",
+            "feature": str(feature or task.get("feature") or "managed_intelligence"),
+            "taskClass": str(task_class or task.get("task_class") or "agent_request"),
             "routeMode": "auto",
-            "autoTier": "high",
+            "autoTier": str(auto_tier or task.get("auto_tier") or "high"),
             "status": status,
             "statusReason": reason,
             "startedAt": started_at,
@@ -334,4 +343,3 @@ def observe_lifecycle(hook_name: str, **kwargs: Any) -> None:
         if not isinstance(duration, int):
             duration = max(0, int((time.monotonic() - started) * 1000))
         _trace(owner, tool_id, f"tool_call_{status}", status, duration)
-
