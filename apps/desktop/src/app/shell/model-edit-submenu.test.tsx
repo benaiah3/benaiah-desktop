@@ -144,10 +144,10 @@ describe('ModelEditSubmenu reports edits without performing them', () => {
       'Extra High',
       'High',
       'Medium',
-      'Instant'
+      'Low'
     ])
     expect(screen.queryByText('Minimal')).toBeNull()
-    expect(screen.queryByText('Low')).toBeNull()
+    expect(screen.queryByText('Instant')).toBeNull()
     expect(screen.queryByText('Max')).toBeNull()
     expect(screen.queryByText('Ultra')).toBeNull()
     expect(screen.queryByText('Thinking')).toBeNull()

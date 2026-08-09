@@ -72,7 +72,7 @@ const STATUS_LABEL: Record<MissionStatus, string> = {
 }
 
 const TIER_LABEL: Record<Mission['intelligence_tier'], string> = {
-  instant: 'Benaiah Instant',
+  instant: 'Benaiah Low',
   medium: 'Benaiah Medium',
   high: 'Benaiah High',
   extra_high: 'Benaiah Extra High',

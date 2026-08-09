@@ -45,7 +45,7 @@ describe('model-status-label', () => {
   it('uses the five stable Benaiah Auto labels and defaults Auto to High', () => {
     expect(formatModelStatusLabel('benaiah-auto')).toBe('Benaiah Auto · High')
     expect(formatModelStatusLabel('benaiah-auto', { reasoningEffort: 'minimal' })).toBe(
-      'Benaiah Auto · Instant'
+      'Benaiah Auto · Low'
     )
     expect(formatModelStatusLabel('benaiah-auto', { reasoningEffort: 'medium' })).toBe(
       'Benaiah Auto · Medium'

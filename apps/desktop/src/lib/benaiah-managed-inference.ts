@@ -14,7 +14,7 @@ export const BENAIAH_AUTO_LEVELS = [
   { effort: 'xhigh', label: 'Extra High' },
   { effort: 'high', label: 'High' },
   { effort: 'medium', label: 'Medium' },
-  { effort: 'minimal', label: 'Instant' }
+  { effort: 'minimal', label: 'Low' }
 ] as const
 
 export const BENAIAH_AUTO_DEFAULT_EFFORT = 'high'

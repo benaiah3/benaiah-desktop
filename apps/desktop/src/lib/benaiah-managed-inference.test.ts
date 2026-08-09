@@ -15,7 +15,7 @@ describe('Benaiah managed inference policy', () => {
     expect(resolveBenaiahAutoEffort('max')).toBe('xhigh')
     expect(resolveBenaiahAutoEffort('low')).toBe('minimal')
     expect(benaiahAutoLevelLabel('max')).toBe('Extra High')
-    expect(benaiahAutoLevelLabel('none')).toBe('Instant')
+    expect(benaiahAutoLevelLabel('none')).toBe('Low')
     expect(defaultEffortForModel(BENAIAH_MANAGED_MODEL, '')).toBe('high')
     expect(defaultEffortForModel('openai/gpt-5.6-sol', 'medium')).toBe('medium')
   })
