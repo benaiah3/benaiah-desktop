@@ -35,7 +35,7 @@ jobs:
         run: npm run --workspace apps/desktop build
 
       - name: Package branded x64 installer
-        run: npm run --workspace apps/desktop builder -- --win nsis --x64
+        run: npm run --workspace apps/desktop builder -- --win nsis --x64 --publish never
 
       - name: Upload installer and update feed
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
