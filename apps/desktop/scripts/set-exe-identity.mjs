@@ -36,15 +36,51 @@
 // otherwise-good build (worst case: stock icon, not a broken app).
 
 import { resolve, join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 
+import * as PELibrary from 'pe-library'
 import { rcedit } from 'rcedit'
+import * as ResEdit from 'resedit'
 
 import { isMain } from './utils.mjs'
 
 // Stamp the Benaiah icon + identity onto `exe`. Resolves on success, throws on
 // failure. `desktopRoot` defaults to this script's package root so the icon and
 // the rcedit dependency resolve regardless of cwd.
+function stampExeIdentityWithoutWine(exe, icon) {
+  const executable = PELibrary.NtExecutable.from(readFileSync(exe))
+  const resources = PELibrary.NtExecutableResource.from(executable)
+  const iconFile = ResEdit.Data.IconFile.from(readFileSync(icon))
+  const iconGroup = ResEdit.Resource.IconGroupEntry.fromEntries(resources.entries)[0]
+
+  ResEdit.Resource.IconGroupEntry.replaceIconsForResource(
+    resources.entries,
+    iconGroup?.id || 1,
+    iconGroup?.lang || 1033,
+    iconFile.icons.map(item => item.data)
+  )
+
+  for (const versionInfo of ResEdit.Resource.VersionInfo.fromEntries(resources.entries)) {
+    versionInfo.setStringValues(
+      { lang: versionInfo.lang || 1033, codepage: 1200 },
+      {
+        ProductName: 'Benaiah',
+        FileDescription: 'Benaiah',
+        CompanyName: 'Benaiah AI',
+        LegalCopyright: 'Copyright (c) 2026 Benaiah AI',
+        InternalName: 'Benaiah.exe',
+        OriginalFilename: 'Benaiah.exe'
+      }
+    )
+    versionInfo.outputToResourceEntries(resources.entries)
+  }
+
+  resources.outputResource(executable)
+  const staged = `${exe}.benaiah-stamped`
+  writeFileSync(staged, Buffer.from(executable.generate()))
+  renameSync(staged, exe)
+}
+
 async function stampExeIdentity(exe, desktopRoot = resolve(import.meta.dirname, '..')) {
   if (!exe || !existsSync(exe)) {
     throw new Error(`target exe not found: ${exe}`)
@@ -59,15 +95,22 @@ async function stampExeIdentity(exe, desktopRoot = resolve(import.meta.dirname, 
   console.log(`[set-exe-identity] stamping ${exe}`)
   console.log(`[set-exe-identity] icon: ${icon}`)
 
-  await rcedit(exe, {
-    icon,
-    'version-string': {
-      ProductName: 'Benaiah',
-      FileDescription: 'Benaiah',
-      CompanyName: 'Benaiah AI',
-      LegalCopyright: 'Copyright (c) 2026 Benaiah AI'
-    }
-  })
+  try {
+    await rcedit(exe, {
+      icon,
+      'version-string': {
+        ProductName: 'Benaiah',
+        FileDescription: 'Benaiah',
+        CompanyName: 'Benaiah AI',
+        LegalCopyright: 'Copyright (c) 2026 Benaiah AI'
+      }
+    })
+  } catch (error) {
+    if (process.platform === 'win32') throw error
+
+    console.log('[set-exe-identity] rcedit unavailable; using the native JavaScript PE editor')
+    stampExeIdentityWithoutWine(exe, icon)
+  }
 
   console.log('[set-exe-identity] done — Benaiah icon + identity stamped')
 }
