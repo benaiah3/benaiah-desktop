@@ -51,6 +51,7 @@ import { prepareBenaiahAccountLink } from './benaiah-account-link'
 import { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } from './bootstrap-platform'
 import { decideBootstrapRepair } from './bootstrap-repair-guard'
 import { runBootstrap } from './bootstrap-runner'
+import { CodexIntelligenceControl } from './codex-intelligence-control'
 import { applyConnectionChange, resolveTerminalConnection } from './connection-apply'
 import {
   authModeFromStatus,
@@ -6940,6 +6941,64 @@ const BENAIAH_TRANSCRIPTION_API = process.env.BENAIAH_TRANSCRIPTION_API || `${BE
 let benaiahRemoteHost: RemoteAccessHost | null = null
 let benaiahRemoteStatus: RemoteHostStatus = { state: 'stopped' }
 
+function runCodexSystemCommand(file: string, args: string[], timeout = 8_000): Promise<boolean> {
+  return new Promise(resolve => {
+    execFile(file, args, { timeout }, error => resolve(!error))
+  })
+}
+
+function findCodexDesktopPids(): Promise<string[]> {
+  return new Promise(resolve => {
+    execFile(
+      '/bin/ps',
+      ['-axo', 'pid=,command='],
+      { timeout: 2_000 },
+      (error, stdout) => {
+        if (error) {
+          resolve([])
+
+          return
+        }
+
+        resolve(
+          String(stdout || '')
+            .split('\n')
+            .map(line => line.match(/^\s*(\d+)\s+.*\/ChatGPT\.app\/Contents\/MacOS\/ChatGPT\s*$/)?.[1] || '')
+            .filter(Boolean)
+        )
+      }
+    )
+  })
+}
+
+async function restartCodexDesktopIfRunning(): Promise<boolean> {
+  if (process.platform !== 'darwin') {
+    return false
+  }
+
+  const pids = await findCodexDesktopPids()
+
+  if (pids.length === 0) {
+    return false
+  }
+
+  await runCodexSystemCommand('/bin/kill', ['-TERM', ...pids], 3_000)
+
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    if ((await findCodexDesktopPids()).length === 0) {
+      break
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
+
+  return runCodexSystemCommand('/usr/bin/open', ['-b', 'com.openai.codex'], 8_000)
+}
+
+const codexIntelligenceControl = new CodexIntelligenceControl({
+  restartCodexIfRunning: restartCodexDesktopIfRunning
+})
+
 function benaiahAccountLinkPath() {
   return path.join(app.getPath('userData'), 'benaiah-account-link.json')
 }
@@ -7138,6 +7197,10 @@ function startBenaiahRemoteAccess() {
     deviceName: os.hostname() || 'My computer',
     localGatewayUrl: () => freshGatewayWsUrl('default'),
     publicKey: identity.publicKey,
+    deviceCommands: {
+      'device.codex.status': () => codexIntelligenceControl.status(),
+      'device.codex.switch': params => codexIntelligenceControl.switch(params)
+    },
     onStatus: status => {
       benaiahRemoteStatus = status
       rememberLog(`[remote-access] ${status.state}${status.state === 'offline' ? `: ${status.reason}` : ''}`)

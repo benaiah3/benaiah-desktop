@@ -22,6 +22,7 @@ type RemoteHostOptions = {
   fetchImpl?: typeof fetch
   socketFactory?: (url: string) => SocketLike
   reconnectDelayMs?: number
+  deviceCommands?: Record<string, (params: Record<string, unknown>) => Promise<unknown>>
   onStatus?: (status: RemoteHostStatus) => void
 }
 
@@ -78,6 +79,7 @@ export class RemoteAccessHost {
   private relay: SocketLike | null = null
   private localSockets = new Map<string, SocketLike>()
   private localQueues = new Map<string, string[]>()
+  private deviceResponses = new Map<string, string>()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private running = false
 
@@ -203,6 +205,10 @@ export class RemoteAccessHost {
   }
 
   private async forwardToLocal(frame: RelayFrame) {
+    if (await this.handleDeviceCommand(frame)) {
+      return
+    }
+
     let socket = this.localSockets.get(frame.channel)
 
     if (!socket) {
@@ -247,6 +253,84 @@ export class RemoteAccessHost {
     }
   }
 
+  private async handleDeviceCommand(frame: RelayFrame): Promise<boolean> {
+    let request: {
+      id?: string | number | null
+      jsonrpc?: string
+      method?: string
+      params?: Record<string, unknown>
+    }
+
+    try {
+      request = JSON.parse(frame.payload)
+    } catch {
+      return false
+    }
+
+    const method = String(request?.method || '')
+    const handler = this.options.deviceCommands?.[method]
+
+    if (!handler) {
+      return false
+    }
+
+    const id = request.id
+
+    if (request.jsonrpc !== '2.0' || id === undefined || id === null) {
+      return true
+    }
+
+    const responseKey = `${frame.channel}:${String(id)}`
+    const previous = this.deviceResponses.get(responseKey)
+
+    if (previous) {
+      this.sendRelayPayload(frame.channel, previous)
+
+      return true
+    }
+
+    let response: string
+
+    try {
+      const result = await handler(request.params && typeof request.params === 'object' ? request.params : {})
+      response = JSON.stringify({ jsonrpc: '2.0', id, result })
+    } catch (error) {
+      response = JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: -32040,
+          message: error instanceof Error ? error.message : 'The device command could not be completed.'
+        }
+      })
+    }
+
+    this.deviceResponses.set(responseKey, response)
+
+    if (this.deviceResponses.size > 100) {
+      this.deviceResponses.delete(this.deviceResponses.keys().next().value as string)
+    }
+
+    this.sendRelayPayload(frame.channel, response)
+
+    return true
+  }
+
+  private sendRelayPayload(channel: string, payload: string) {
+    if (this.relay?.readyState !== OPEN) {
+      return
+    }
+
+    this.relay.send(
+      JSON.stringify({
+        v: 1,
+        type: 'relay.frame',
+        channel,
+        payload
+      })
+    )
+  }
+
   private flushLocal(channel: string, socket: SocketLike) {
     const queue = this.localQueues.get(channel) || []
 
@@ -264,6 +348,7 @@ export class RemoteAccessHost {
 
     this.localSockets.clear()
     this.localQueues.clear()
+    this.deviceResponses.clear()
   }
 
   private fail(reason: string) {

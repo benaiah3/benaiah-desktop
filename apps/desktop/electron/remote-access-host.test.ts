@@ -105,3 +105,77 @@ test('registers the host and forwards one client channel to the loopback gateway
   assert.deepEqual(statuses.slice(0, 2), ['connecting', 'online'])
   host.stop()
 })
+
+test('handles only explicitly allowlisted device commands in Electron', async () => {
+  const sockets: FakeSocket[] = []
+  const commands: Array<{ method: string; params: Record<string, unknown> }> = []
+
+  const fetchImpl = async (url: string | URL | Request) => {
+    const path = new URL(String(url)).pathname
+
+    const payload = path.endsWith('/remote/ticket')
+      ? { url: 'wss://relay.example/v1/connect', ticket: 'signed-ticket' }
+      : { device: {} }
+
+    return new Response(JSON.stringify(payload), { status: 201, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  const host = new RemoteAccessHost({
+    accessToken: 'bna_guest_token',
+    appVersion: '0.35.18',
+    deviceId: 'device_0123456789abcdef',
+    deviceName: 'Test Mac',
+    publicKey: 'A'.repeat(64),
+    fetchImpl: fetchImpl as typeof fetch,
+    localGatewayUrl: async () => 'ws://127.0.0.1:8642/api/ws?token=local',
+    socketFactory: () => {
+      const socket = new FakeSocket()
+      sockets.push(socket)
+
+      return socket
+    },
+    deviceCommands: {
+      'device.codex.switch': async params => {
+        commands.push({ method: 'device.codex.switch', params })
+
+        return { enabled: true, intensity: 'high' }
+      }
+    }
+  })
+
+  host.start()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  sockets[0].emit('open')
+
+  const commandFrame = {
+    v: 1,
+    type: 'relay.frame',
+    channel: 'mobile-control',
+    payload: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 'control-1',
+      method: 'device.codex.switch',
+      params: { enabled: true, intensity: 'high' }
+    })
+  }
+
+  sockets[0].emit('message', { data: JSON.stringify(commandFrame) })
+  await new Promise(resolve => setTimeout(resolve, 0))
+
+  assert.equal(sockets.length, 1, 'allowlisted control never opens a general gateway socket')
+  assert.deepEqual(commands, [
+    { method: 'device.codex.switch', params: { enabled: true, intensity: 'high' } }
+  ])
+  const response = JSON.parse(sockets[0].sent[0])
+  assert.equal(response.channel, 'mobile-control')
+  assert.deepEqual(JSON.parse(response.payload), {
+    jsonrpc: '2.0',
+    id: 'control-1',
+    result: { enabled: true, intensity: 'high' }
+  })
+
+  sockets[0].emit('message', { data: JSON.stringify(commandFrame) })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(commands.length, 1, 'a replay receives the cached receipt without rerunning the switch')
+  host.stop()
+})
