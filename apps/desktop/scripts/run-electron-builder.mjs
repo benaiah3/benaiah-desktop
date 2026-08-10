@@ -40,8 +40,12 @@ function electronBuilderCli() {
 const dist = electronDistDir()
 const args = []
 const childEnv = { ...process.env }
+const passthrough = process.argv.slice(2)
+const targetingWin =
+  passthrough.includes("--win") ||
+  passthrough.some((arg) => arg === "win" || arg.startsWith("win:"))
 
-if (process.platform === "darwin" && !childEnv.CSC_KEYCHAIN) {
+if (process.platform === "darwin" && !targetingWin && !childEnv.CSC_KEYCHAIN) {
   const signingDir = path.join(
     os.homedir(),
     "Library",
@@ -73,10 +77,6 @@ if (process.platform === "darwin" && !childEnv.CSC_KEYCHAIN) {
   }
 }
 
-const passthrough = process.argv.slice(2)
-const targetingWin =
-  passthrough.includes("--win") ||
-  passthrough.some((arg) => arg === "win" || arg.startsWith("win:"))
 // macOS Electron.app dist must not be injected when packaging Windows —
 // electron-builder renames the wrong binary and the win build fails.
 const useLocalDist =
