@@ -20,7 +20,7 @@ export function prepareBenaiahAccountLink(
     const deviceId = String(options.deviceId || '')
 
     if (!DEVICE_ID_PATTERN.test(deviceId)) {
-      throw new Error('Benaiah could not identify this Mac for remote access.')
+      throw new Error('Benaiah could not identify this computer for remote access.')
     }
 
     parsed.searchParams.set('next', 'remote')

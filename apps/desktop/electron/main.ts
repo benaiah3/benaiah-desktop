@@ -7135,7 +7135,7 @@ function startBenaiahRemoteAccess() {
     apiBaseUrl: BENAIAH_REMOTE_API,
     appVersion: app.getVersion(),
     deviceId: identity.deviceId,
-    deviceName: os.hostname() || 'My Mac',
+    deviceName: os.hostname() || 'My computer',
     localGatewayUrl: () => freshGatewayWsUrl('default'),
     publicKey: identity.publicKey,
     onStatus: status => {
@@ -7183,7 +7183,7 @@ async function createBenaiahRemotePairing() {
     linked: true,
     online: benaiahRemoteStatus.state === 'online',
     state: benaiahRemoteStatus.state,
-    deviceName: String(pairing?.device?.name || os.hostname() || 'My Mac'),
+    deviceName: String(pairing?.device?.name || os.hostname() || 'My computer'),
     expiresAt: String(pairing.expiresAt),
     url: String(pairing.url)
   }

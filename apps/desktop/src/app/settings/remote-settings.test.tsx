@@ -59,7 +59,7 @@ describe('RemoteSettings', () => {
     await waitFor(() => expect(startAccountQr).toHaveBeenCalledTimes(1))
     expect(startAccount).not.toHaveBeenCalled()
     expect(
-      (await screen.findByAltText('Scan to connect this Mac to your Benaiah account')).getAttribute('src')
+      (await screen.findByAltText('Scan to connect this computer to your Benaiah account')).getAttribute('src')
     ).toBe('data:image/png;base64,phone-qr')
     expect(screen.getByText('Scan with the phone you use for Benaiah')).toBeTruthy()
   })

@@ -162,7 +162,7 @@ export function RemoteSettings() {
               <div className="rounded-[1.75rem] bg-white p-3 shadow-sm">
                 {accountQrCode && !accountExpired ? (
                   <img
-                    alt="Scan to connect this Mac to your Benaiah account"
+                    alt="Scan to connect this computer to your Benaiah account"
                     className="size-72 max-h-[44vh] max-w-full rounded-2xl"
                     height="288"
                     src={accountQrCode}
@@ -222,7 +222,7 @@ export function RemoteSettings() {
 
               <div className="mt-4 flex items-center gap-2 text-sm font-medium">
                 <CheckCircle2 className="size-4" />
-                <span>{pairing.deviceName || 'This Mac'}</span>
+                <span>{pairing.deviceName || 'This computer'}</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {pairing.online ? 'Online' : 'Connecting'} · code expires in {remainingLabel(pairing.expiresAt)}
@@ -238,7 +238,7 @@ export function RemoteSettings() {
         <div className="mt-5 rounded-2xl border border-border/60 px-4 py-3 text-sm">
           <p className="font-medium">Open your phone camera and scan.</p>
           <p className="mt-1 leading-5 text-muted-foreground">
-            If you are already signed into Benaiah, your Mac connects and the remote opens automatically.
+            If you are already signed into Benaiah, this computer connects and the remote opens automatically.
             The code works once, expires after five minutes and cannot pair another account.
           </p>
         </div>

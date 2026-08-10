@@ -2,7 +2,7 @@
   "name": "benaiah-desktop",
   "productName": "Benaiah",
   "private": true,
-  "version": "0.35.16",
+  "version": "0.35.17",
   "description": "Native desktop shell for Benaiah.",
   "author": "Benaiah AI",
   "type": "module",

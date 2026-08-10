@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { prepareBenaiahAccountLink } from './benaiah-account-link'
 
 describe('prepareBenaiahAccountLink', () => {
-  it('carries a one-time account link directly into the matching remote Mac', () => {
+  it('carries a one-time account link directly into the matching remote computer', () => {
     const value = prepareBenaiahAccountLink('https://benaiah.ai/settings?code=one-time-code#profile', {
       deviceId: 'device_1234567890',
       returnToRemote: true

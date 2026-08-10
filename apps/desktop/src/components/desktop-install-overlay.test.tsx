@@ -99,16 +99,16 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    expect(await screen.findByText('Set up Benaiah on this Mac')).toBeTruthy()
+    expect(await screen.findByText('Set up Benaiah on this computer')).toBeTruthy()
     expect(screen.getByText('Advanced connection options')).toBeTruthy()
-    expect(screen.getByText('Set up on this Mac')).toBeTruthy()
+    expect(screen.getByText('Set up on this computer')).toBeTruthy()
     expect(screen.queryByText(/Will install to/i)).toBeNull()
     expect(screen.queryByText(/\.hermes/i)).toBeNull()
     expect(screen.queryByText(/steps complete/i)).toBeNull()
     expect(screen.queryByText(/Fetching installer manifest/i)).toBeNull()
   })
 
-  it('continues local bootstrap only when Set up on this Mac is selected', async () => {
+  it('continues local bootstrap only when Set up on this computer is selected', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
         setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
@@ -117,16 +117,16 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Set up on this Mac'))
+    fireEvent.click(await screen.findByText('Set up on this computer'))
 
     expect(desktop.continueBootstrapLocal).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('Set up Benaiah on this Mac')).toBeTruthy()
+    expect(screen.getByText('Set up Benaiah on this computer')).toBeTruthy()
 
     act(() => {
       desktop.emitBootstrapEvent({ type: 'manifest', protocolVersion: 1, stages: [] })
     })
 
-    await waitFor(() => expect(screen.queryByText('Set up Benaiah on this Mac')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Set up Benaiah on this computer')).toBeNull())
     expect(screen.getByText(/Fetching installer manifest/i)).toBeTruthy()
   })
 
@@ -140,7 +140,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    const install = (await screen.findByText('Set up on this Mac')).closest('button') as HTMLButtonElement
+    const install = (await screen.findByText('Set up on this computer')).closest('button') as HTMLButtonElement
     fireEvent.click(install)
 
     expect(
@@ -162,7 +162,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     // Click the instant the choice paints, before React drains the passive
     // effect that reacts to the first snapshot. A loaded runner hits this
     // window by accident; observing the DOM directly hits it every time.
-    const install = (await whenPresent('Set up on this Mac')).closest('button') as HTMLButtonElement
+    const install = (await whenPresent('Set up on this computer')).closest('button') as HTMLButtonElement
     fireEvent.click(install)
 
     await act(async () => {
@@ -182,7 +182,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click((await screen.findByText('Set up on this Mac')).closest('button') as HTMLButtonElement)
+    fireEvent.click((await screen.findByText('Set up on this computer')).closest('button') as HTMLButtonElement)
     expect(
       await screen.findByText('Local installation could not start. Restart Benaiah Desktop and try again.')
     ).toBeTruthy()
@@ -229,8 +229,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     fireEvent.click(screen.getByText('Back'))
 
-    expect(await screen.findByText('Set up Benaiah on this Mac')).toBeTruthy()
-    expect(screen.getByText('Set up on this Mac')).toBeTruthy()
+    expect(await screen.findByText('Set up Benaiah on this computer')).toBeTruthy()
+    expect(screen.getByText('Set up on this computer')).toBeTruthy()
   })
 
   it('requires a successful token connection test before applying remote config', async () => {
