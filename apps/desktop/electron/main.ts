@@ -47,7 +47,11 @@ import {
 } from './backend-probes'
 import { waitForDashboardPortAnnouncement } from './backend-ready'
 import { shouldLatchBackendStartFailure, shouldLatchRemoteReauthFailure } from './backend-start-failure'
-import { prepareBenaiahAccountLink } from './benaiah-account-link'
+import {
+  benaiahBrowserLinkCode,
+  benaiahBrowserLinkPrompt,
+  prepareBenaiahAccountLink
+} from './benaiah-account-link'
 import { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } from './bootstrap-platform'
 import { decideBootstrapRepair } from './bootstrap-repair-guard'
 import { runBootstrap } from './bootstrap-runner'
@@ -6933,6 +6937,8 @@ function decryptDesktopSecret(secret) {
 
 const BENAIAH_ACCOUNT_GATEWAY = process.env.BENAIAH_ACCOUNT_GATEWAY || 'https://benaiah.ai/api/cli/v1'
 const BENAIAH_ACCOUNT_INFERENCE_GATEWAY = `${BENAIAH_ACCOUNT_GATEWAY.replace(/\/$/, '')}/desktop`
+const BENAIAH_BROWSER_LINK_API = `${BENAIAH_ACCOUNT_GATEWAY}/browser-link`
+let benaiahBrowserLinkConfirmationOpen = false
 
 const BENAIAH_REMOTE_API = process.env.BENAIAH_REMOTE_API || 'https://benaiah.ai/api'
 
@@ -7403,6 +7409,63 @@ function reopenBenaiahAccountLink() {
   }
 
   return { opened: true }
+}
+
+async function authoriseBenaiahBrowserLink(code: string) {
+  const account = readBenaiahAccount()
+
+  if (!account) {
+    rememberLog('[browser-link] Work is not connected to a Benaiah account')
+
+    return
+  }
+
+  if (benaiahBrowserLinkConfirmationOpen) {
+    rememberLog('[browser-link] ignored overlapping Chrome account handoff')
+
+    return
+  }
+
+  benaiahBrowserLinkConfirmationOpen = true
+
+  try {
+    const prompt = benaiahBrowserLinkPrompt(account.email)
+    const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+
+    const { response } = parent
+      ? await dialog.showMessageBox(parent, {
+          ...prompt,
+          buttons: ['Allow', 'Not now'],
+          cancelId: 1,
+          defaultId: 0,
+          noLink: true,
+          type: 'question'
+        })
+      : await dialog.showMessageBox({
+          ...prompt,
+          buttons: ['Allow', 'Not now'],
+          cancelId: 1,
+          defaultId: 0,
+          noLink: true,
+          type: 'question'
+        })
+
+    await fetchJson(BENAIAH_BROWSER_LINK_API, null, {
+      method: 'POST',
+      bearer: account.token,
+      body: { action: response === 0 ? 'authorise' : 'deny', code },
+      timeoutMs: 15_000
+    })
+    rememberLog(
+      response === 0
+        ? '[browser-link] authorised Chrome account handoff'
+        : '[browser-link] declined Chrome account handoff'
+    )
+  } catch (error) {
+    rememberLog(`[browser-link] authorisation failed: ${error?.message || error}`)
+  } finally {
+    benaiahBrowserLinkConfirmationOpen = false
+  }
 }
 
 // Validate + normalize the per-profile remote overrides map read from disk.
@@ -12309,6 +12372,7 @@ const PRIMARY_PROTOCOL = 'benaiah'
 const SUPPORTED_PROTOCOLS = [PRIMARY_PROTOCOL, 'hermes']
 let _pendingDeepLink = null
 let _rendererReadyForDeepLink = false
+let _pendingBrowserLinkCode: string | null = null
 
 function _extractDeepLink(argv) {
   if (!Array.isArray(argv)) {
@@ -12323,6 +12387,18 @@ function _extractDeepLink(argv) {
 
 function handleDeepLink(url) {
   if (!url || typeof url !== 'string') {
+    return
+  }
+
+  const browserLinkCode = benaiahBrowserLinkCode(url)
+
+  if (browserLinkCode) {
+    if (!app.isReady()) {
+      _pendingBrowserLinkCode = browserLinkCode
+    } else {
+      void authoriseBenaiahBrowserLink(browserLinkCode)
+    }
+
     return
   }
 
@@ -12472,6 +12548,12 @@ app.whenReady().then(() => {
   createWindow()
   migrateLegacyBenaiahAccount()
   startBenaiahRemoteAccess()
+
+  if (_pendingBrowserLinkCode) {
+    const code = _pendingBrowserLinkCode
+    _pendingBrowserLinkCode = null
+    void authoriseBenaiahBrowserLink(code)
+  }
 
   // Win/Linux cold start: the launching hermes:// URL is in our own argv.
   const _coldStartLink = _extractDeepLink(process.argv)
